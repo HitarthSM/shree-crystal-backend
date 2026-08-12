@@ -1,0 +1,568 @@
+// ─── Prisma Schema — Shree Crystal Credit Society ────────────────────────────
+// Learn more: https://pris.ly/d/prisma-schema
+//
+// Encryption note
+// ────────────────
+// Member.aadhaarEncrypted and Member.panEncrypted are NEVER stored as plain
+// text. Application code MUST encrypt/decrypt via the FIELD_ENCRYPTION_KEY env
+// variable (AES-256-GCM) before writing to / after reading from these columns.
+//
+// Soft-delete policy
+// ───────────────────
+// No entity in this schema is hard-deleted. Every model that can be "removed"
+// carries either a `status` enum field or an `isActive` boolean. Referential
+// actions are Restrict or SetNull — never Cascade on data rows.
+//
+// ActivityLog immutability
+// ─────────────────────────
+// ActivityLog has no `updatedAt`. Application code must NEVER expose an update
+// or delete path for this table.
+//
+// Rate history
+// ─────────────
+// LoanType.defaultInterestRate and DepositScheme.defaultInterestRate are
+// display-only "current" values. All historical rates live in RateHistory
+// (effectiveFrom / effectiveTo). MemberLoan.rateHistoryId is the immutable
+// snapshot that was active at disbursement time.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ENUMS
+// ═════════════════════════════════════════════════════════════════════════════
+
+enum MemberStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum NoticeCategory {
+  GENERAL
+  AGM
+  CIRCULAR
+  URGENT
+  SCHEME_UPDATE
+}
+
+enum NoticeChannel {
+  WEBSITE
+  SMS
+  EMAIL
+}
+
+/// Delivery record status for a single channel dispatch
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum StatementStatus {
+  PUBLISHED
+  WITHDRAWN
+  SUPERSEDED
+}
+
+enum QueryStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum PendingActionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Generic action types supported by the maker-checker workflow
+enum ActionType {
+  MEMBER_STATUS_CHANGE
+  RATE_CHANGE
+  STATEMENT_BATCH_PUBLISH
+  LOAN_APPROVAL
+  LOAN_CLOSURE
+  DEPOSIT_SCHEME_CHANGE
+  MEMBER_CHANGE_REQUEST_APPROVAL
+}
+
+enum LoanStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  CLOSED
+  DEFAULTED
+  REJECTED
+}
+
+enum RepaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum ChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Which kind of entity a RateHistory row belongs to
+enum RateEntityType {
+  LOAN_TYPE
+  DEPOSIT_SCHEME
+}
+
+/// Who sent a message in a support query thread
+enum SenderType {
+  MEMBER
+  ADMIN
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// MEMBER
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Core member record. Sensitive identity fields are stored encrypted.
+/// See the encryption note at the top of this file.
+model Member {
+  id             String       @id @default(cuid())
+  /// Unique society-issued membership number (e.g. "SCR-0001")
+  memberNumber   String       @unique
+  name           String
+  phone          String       @unique
+  email          String?      @unique
+  /// AES-256-GCM encrypted Aadhaar number — NEVER stored as plain text
+  aadhaarEncrypted String?   @map("aadhaar_encrypted")
+  /// AES-256-GCM encrypted PAN number — NEVER stored as plain text
+  panEncrypted   String?      @map("pan_encrypted")
+  address        String?
+  /// Profile / KYC document URL (stored in object storage, not inline)
+  profilePhotoUrl String?
+  status         MemberStatus @default(ACTIVE)
+  joinedAt       DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  statements         Statement[]
+  noticeDeliveries   NoticeDelivery[]
+  loans              MemberLoan[]
+  supportQueries     SupportQuery[]
+  changeRequests     MemberChangeRequest[]
+
+  @@index([status])
+  @@index([memberNumber])
+  @@map("members")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ADMIN USER
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Administrative user (society staff / super admin). isActive replaces hard-delete.
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         AdminRole @default(OPERATOR)
+  /// Soft-delete flag — never set isActive=false AND delete the row
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations — admin may have made/checked many pending actions
+  actionsMade     PendingAction[] @relation("ActionMadeBy")
+  actionsChecked  PendingAction[] @relation("ActionCheckedBy")
+  rateHistorySet  RateHistory[]
+  settingsUpdated Settings[]
+  resolvedRequests MemberChangeRequest[] @relation("RequestResolvedBy")
+
+  @@index([email])
+  @@index([role])
+  @@map("admin_users")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// STATEMENT
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Periodic account statements generated for members (monthly / annual).
+/// Withdrawn / superseded statements keep their row; only status changes.
+model Statement {
+  id          String          @id @default(cuid())
+  memberId    String
+  /// Human-readable period label e.g. "2024-03" or "2023-2024"
+  period      String
+  /// URL to the PDF stored in object storage
+  fileUrl     String
+  status      StatementStatus @default(PUBLISHED)
+  publishedAt DateTime        @default(now())
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
+
+  @@index([memberId])
+  @@index([period])
+  @@map("statements")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// NOTICE
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Society-wide notices / announcements. isActive = false = soft-archived.
+model Notice {
+  id          String         @id @default(cuid())
+  title       String
+  body        String         @db.Text
+  category    NoticeCategory @default(GENERAL)
+  publishedAt DateTime       @default(now())
+  expiresAt   DateTime?
+  isActive    Boolean        @default(true)
+  /// Optional URL attachment (e.g. AGM agenda PDF)
+  attachmentUrl String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  deliveries NoticeDelivery[]
+
+  @@index([category])
+  @@index([isActive])
+  @@map("notices")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// NOTICE DELIVERY
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Tracks per-member, per-channel dispatch of a notice.
+model NoticeDelivery {
+  id       String         @id @default(cuid())
+  noticeId String
+  memberId String
+  channel  NoticeChannel
+  status   DeliveryStatus @default(PENDING)
+  sentAt   DateTime?
+  /// Error message if delivery failed (for retry / audit)
+  errorMsg String?
+  createdAt DateTime      @default(now())
+
+  notice Notice @relation(fields: [noticeId], references: [id], onDelete: Restrict)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
+
+  @@unique([noticeId, memberId, channel])
+  @@index([memberId])
+  @@index([status])
+  @@map("notice_deliveries")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ACTIVITY LOG  — immutable, no updatedAt
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Immutable audit trail. Application code MUST NOT expose update or delete
+/// paths for this table. No updatedAt field by design.
+model ActivityLog {
+  id         String   @id @default(cuid())
+  /// ID of the actor (AdminUser.id or Member.id)
+  actorId    String
+  /// "ADMIN" | "MEMBER" | "SYSTEM"
+  actorType  String
+  /// Human-readable action label e.g. "MEMBER_CREATED"
+  action     String
+  /// Entity type that was affected e.g. "Member", "MemberLoan"
+  entityType String
+  /// ID of the affected entity
+  entityId   String?
+  /// Arbitrary JSON snapshot (before/after or context)
+  meta       Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// LOAN TYPE
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Master definition of a loan product. Rates here are *current display* only.
+/// Historical rates are tracked in RateHistory.
+model LoanType {
+  id                   String   @id @default(cuid())
+  name                 String   @unique
+  /// Current annual interest rate (%) — for display / new loan defaults only
+  defaultInterestRate  Decimal  @db.Decimal(6, 4)
+  /// Current annual penalty rate (%) for overdue repayments
+  defaultPenaltyRate   Decimal  @db.Decimal(6, 4)
+  description          String?
+  /// Max tenure allowed in months (null = no cap)
+  maxTenureMonths      Int?
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  loans       MemberLoan[]
+  rateHistory RateHistory[]
+
+  @@index([isActive])
+  @@map("loan_types")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// DEPOSIT SCHEME
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Master definition of a deposit / savings product.
+model DepositScheme {
+  id                  String   @id @default(cuid())
+  name                String   @unique
+  /// Current annual interest rate (%) — display only
+  defaultInterestRate Decimal  @db.Decimal(6, 4)
+  /// Tenure in months (null = open-ended / flexi)
+  tenureMonths        Int?
+  description         String?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  rateHistory RateHistory[]
+
+  @@index([isActive])
+  @@map("deposit_schemes")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// RATE HISTORY
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Immutable log of every interest-rate change for any loan type or deposit
+/// scheme. effectiveTo = null means the rate is still active.
+/// MemberLoan.rateHistoryId links to the snapshot active at disbursement.
+model RateHistory {
+  id            String         @id @default(cuid())
+  entityType    RateEntityType
+  /// FK to either LoanType.id or DepositScheme.id (stored as plain string
+  /// because Prisma cannot express a polymorphic FK natively)
+  entityId      String
+  interestRate  Decimal        @db.Decimal(6, 4)
+  /// Penalty rate (only applicable for loan-type histories)
+  penaltyRate   Decimal?       @db.Decimal(6, 4)
+  effectiveFrom DateTime       @default(now())
+  /// null = this is the currently active rate
+  effectiveTo   DateTime?
+  setByAdminId  String
+  createdAt     DateTime       @default(now())
+
+  setByAdmin AdminUser    @relation(fields: [setByAdminId], references: [id], onDelete: Restrict)
+  loanType   LoanType?    @relation(fields: [entityId], references: [id], map: "rate_history_loan_type_fk")
+  depositScheme DepositScheme? @relation(fields: [entityId], references: [id], map: "rate_history_deposit_scheme_fk")
+  loans      MemberLoan[]
+
+  @@index([entityType, entityId])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@map("rate_history")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// MEMBER LOAN
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// A loan issued to a member. rateHistoryId is immutable after disbursement.
+model MemberLoan {
+  id                String     @id @default(cuid())
+  memberId          String
+  loanTypeId        String
+  /// Rate snapshot active at disbursement — immutable after the loan is opened
+  rateHistoryId     String
+  principalAmount   Decimal    @db.Decimal(14, 2)
+  outstandingAmount Decimal    @db.Decimal(14, 2)
+  status            LoanStatus @default(PENDING_APPROVAL)
+  /// Date the principal was actually disbursed (null until approved)
+  disbursedAt       DateTime?
+  closedAt          DateTime?
+  notes             String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  member      Member        @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  loanType    LoanType      @relation(fields: [loanTypeId], references: [id], onDelete: Restrict)
+  rateHistory RateHistory   @relation(fields: [rateHistoryId], references: [id], onDelete: Restrict)
+  repayments  LoanRepayment[]
+
+  @@index([memberId])
+  @@index([status])
+  @@map("member_loans")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// LOAN REPAYMENT
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// A single instalment payment against a loan. Never hard-deleted.
+model LoanRepayment {
+  id            String          @id @default(cuid())
+  loanId        String
+  amount        Decimal         @db.Decimal(14, 2)
+  principalPart Decimal         @db.Decimal(14, 2)
+  interestPart  Decimal         @db.Decimal(14, 2)
+  penaltyPart   Decimal         @default(0) @db.Decimal(14, 2)
+  paidAt        DateTime        @default(now())
+  status        RepaymentStatus @default(PENDING)
+  /// Reference number from payment gateway / receipt
+  referenceNo   String?
+  createdAt     DateTime        @default(now())
+
+  loan MemberLoan @relation(fields: [loanId], references: [id], onDelete: Restrict)
+
+  @@index([loanId])
+  @@index([status])
+  @@map("loan_repayments")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PENDING ACTION  — maker-checker / approval workflow
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Generic maker-checker table reused by member-status changes, rate changes,
+/// statement batch publishes, and any other two-eyes approval workflow.
+/// checkedBy and resolvedAt are null until the action is resolved.
+model PendingAction {
+  id         String              @id @default(cuid())
+  actionType ActionType
+  /// Arbitrary JSON payload describing the action (before/after values, IDs, etc.)
+  payload    Json
+  status     PendingActionStatus @default(PENDING)
+  /// Admin who initiated the action
+  madeById   String
+  /// Admin who approved or rejected (null until resolved)
+  checkedById String?
+  createdAt  DateTime            @default(now())
+  /// null until the action is approved or rejected
+  resolvedAt DateTime?
+  /// Optional human-readable note from the checker
+  checkerNote String?
+
+  madeBy    AdminUser  @relation("ActionMadeBy", fields: [madeById], references: [id], onDelete: Restrict)
+  checkedBy AdminUser? @relation("ActionCheckedBy", fields: [checkedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([actionType])
+  @@index([madeById])
+  @@map("pending_actions")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SUPPORT QUERY
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// A member's support / grievance ticket. Closed tickets keep their row.
+model SupportQuery {
+  id        String      @id @default(cuid())
+  memberId  String
+  subject   String
+  status    QueryStatus @default(OPEN)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  member   Member         @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  messages QueryMessage[]
+
+  @@index([memberId])
+  @@index([status])
+  @@map("support_queries")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// QUERY MESSAGE
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Individual messages in a support query thread (member ↔ admin).
+model QueryMessage {
+  id         String     @id @default(cuid())
+  queryId    String
+  senderType SenderType
+  /// ID of the sender (Member.id or AdminUser.id)
+  senderId   String
+  body       String     @db.Text
+  sentAt     DateTime   @default(now())
+  createdAt  DateTime   @default(now())
+
+  query SupportQuery @relation(fields: [queryId], references: [id], onDelete: Restrict)
+
+  @@index([queryId])
+  @@map("query_messages")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// MEMBER CHANGE REQUEST
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// A member's request to update their own profile fields (e.g. address, phone).
+/// Requires admin approval before the change is applied to the Member row.
+model MemberChangeRequest {
+  id          String              @id @default(cuid())
+  memberId    String
+  /// Name of the field the member wants to change (e.g. "address", "email")
+  fieldName   String
+  /// JSON-serialised previous value (for audit)
+  oldValue    String?
+  /// JSON-serialised requested new value
+  newValue    String
+  status      ChangeRequestStatus @default(PENDING)
+  requestedAt DateTime            @default(now())
+  /// null until approved or rejected
+  resolvedAt  DateTime?
+  resolvedById String?
+  createdAt   DateTime            @default(now())
+
+  member     Member     @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  resolvedBy AdminUser? @relation("RequestResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([memberId])
+  @@index([status])
+  @@map("member_change_requests")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SETTINGS
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Key-value store for global application settings (e.g. interest-cycle day,
+/// SMS templates, feature flags). A single row per key; keys are never deleted.
+model Settings {
+  id          String    @id @default(cuid())
+  /// Unique settings key (e.g. "interest.cycle.day", "feature.sms.enabled")
+  key         String    @unique
+  /// Arbitrary JSON value — can be a primitive, object, or array
+  value       Json
+  description String?
+  updatedAt   DateTime  @updatedAt
+  updatedById String?
+
+  updatedBy AdminUser? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("settings")
+}
