@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
   LoginDto,
@@ -59,6 +59,16 @@ export class AuthController {
       changePasswordDto.newPassword,
     );
     return { message: 'Password changed successfully' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  getMe(@Req() req: Request) {
+    // req.user is populated by JwtStrategy with the full user record
+    const user = req.user as any;
+    // Exclude passwordHash for security
+    const { passwordHash, ...safeUser } = user;
+    return safeUser;
   }
 
   @UseGuards(JwtAuthGuard)
