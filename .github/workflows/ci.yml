@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+
+jobs:
+  lint-build-test:
+    name: Lint · Build · Test
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Run unit tests
+        run: npm run test -- --passWithNoTests
+        env:
+          NODE_ENV: test
+          # Provide stub env vars so ConfigModule validation passes during tests
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          JWT_SECRET: test-secret-that-is-long-enough-32chars
+          JWT_EXPIRES_IN: 7d
+          SMS_GATEWAY_KEY: test-sms-key
+          EMAIL_SMTP_HOST: smtp.test.com
+          EMAIL_SMTP_PORT: 587
+          EMAIL_SMTP_USER: test@test.com
+          EMAIL_SMTP_PASS: test-pass
+          FRONTEND_ORIGIN: http://localhost:3001
+          SWAGGER_ENABLED: 'false'
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: lint-build-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Staging
+        run: |
+          echo "🚀 Deploying to staging..."
+          # TODO: Replace with your actual staging deployment commands
+          # e.g., ssh user@staging-server 'cd /var/www/staging && git pull origin main && npm ci && npm run build && pm2 restart staging-app'
+          echo "✅ Staging deployment successful!"
+
+  deploy-production:
+    name: Deploy to Production
+    needs: lint-build-test
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Production
+        run: |
+          echo "🚀 Deploying to production..."
+          # TODO: Replace with your actual production deployment commands
+          # e.g., ssh user@prod-server 'cd /var/www/prod && git pull origin main && npm ci && npm run build && pm2 restart prod-app'
+          echo "✅ Production deployment successful!"

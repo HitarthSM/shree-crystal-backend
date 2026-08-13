@@ -1,0 +1,219 @@
+
+> shree-crystal-backend@0.0.1 lint
+> eslint "{src,apps,libs,test}/**/*.ts" --fix
+
+
+/home/hitarth/Crystal/shree-crystal-backend/src/activity-log/activity-log.controller.ts
+  26:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/hitarth/Crystal/shree-crystal-backend/src/activity-log/activity-log.service.ts
+  55:73  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/hitarth/Crystal/shree-crystal-backend/src/auth/auth.controller.ts
+  13:20  warning  'SkipThrottle' is defined but never used                                  @typescript-eslint/no-unused-vars
+  54:30  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  56:7   warning  Unsafe argument of type `any` assigned to a parameter of type `string`    @typescript-eslint/no-unsafe-argument
+  57:7   warning  Unsafe argument of type `any` assigned to a parameter of type `UserType`  @typescript-eslint/no-unsafe-argument
+
+/home/hitarth/Crystal/shree-crystal-backend/src/auth/auth.service.ts
+    5:3   warning  'LockedException' is defined but never used                             @typescript-eslint/no-unused-vars
+   43:67  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   60:33  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  130:68  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  132:38  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  132:53  warning  Unsafe argument of type `any` assigned to a parameter of type `number`  @typescript-eslint/no-unsafe-argument
+  136:36  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  165:22  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  166:22  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  166:45  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  169:43  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  170:16  warning  'error' is defined but never used                                       @typescript-eslint/no-unused-vars
+  179:24  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  225:22  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  226:22  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  226:45  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  229:43  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  230:16  warning  'error' is defined but never used                                       @typescript-eslint/no-unused-vars
+
+/home/hitarth/Crystal/shree-crystal-backend/src/auth/jwt.strategy.ts
+  20:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  46:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/hitarth/Crystal/shree-crystal-backend/src/auth/otp.service.ts
+  46:5  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+/home/hitarth/Crystal/shree-crystal-backend/src/common/guards/member-ownership.guard.ts
+  36:42  warning  Unsafe argument of type error typed assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+
+/home/hitarth/Crystal/shree-crystal-backend/src/common/guards/roles.guard.ts
+  36:48  warning  Unsafe argument of type error typed assigned to a parameter of type `AdminRole`  @typescript-eslint/no-unsafe-argument
+
+/home/hitarth/Crystal/shree-crystal-backend/src/loan-config/dto/index.ts
+  112:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  135:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/hitarth/Crystal/shree-crystal-backend/src/loan-config/loan-config-action.handler.ts
+   3:10  warning  'ActionType' is defined but never used                              @typescript-eslint/no-unused-vars
+   3:22  warning  'PendingActionStatus' is defined but never used                     @typescript-eslint/no-unused-vars
+  12:9   warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+  72:23  warning  Unsafe argument of type `any` assigned to a parameter of type `{}`  @typescript-eslint/no-unsafe-argument
+
+/home/hitarth/Crystal/shree-crystal-backend/src/loan-config/loan-config.controller.ts
+  36:77  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  37:55  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  46:26  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  48:59  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  54:87  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  55:60  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  64:26  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  66:64  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+
+/home/hitarth/Crystal/shree-crystal-backend/src/loan-config/loan-config.service.ts
+   22:43  warning  Unsafe argument of type `any` assigned to a parameter of type `RateChangePayload`  @typescript-eslint/no-unsafe-argument
+   27:69  warning  Unsafe argument of type `any` assigned to a parameter of type `RateChangePayload`  @typescript-eslint/no-unsafe-argument
+   41:50  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+   92:17  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+   99:48  warning  'adminId' is defined but never used. Allowed unused args must match /^_/u          @typescript-eslint/no-unused-vars
+  142:58  warning  'adminId' is defined but never used. Allowed unused args must match /^_/u          @typescript-eslint/no-unused-vars
+
+/home/hitarth/Crystal/shree-crystal-backend/src/loan-config/rate-scheduler.service.ts
+  46:50  error  Invalid type "Decimal" of template literal expression  @typescript-eslint/restrict-template-expressions
+  59:36  error  Invalid type "Decimal" of template literal expression  @typescript-eslint/restrict-template-expressions
+
+/home/hitarth/Crystal/shree-crystal-backend/src/members/controllers/members-me.controller.ts
+  13:35  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  14:40  warning  Unsafe argument of type `any` assigned to a parameter of type `string`     @typescript-eslint/no-unsafe-argument
+  18:25  warning  'changes' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  18:34  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  18:54  warning  'user' is defined but never used. Allowed unused args must match /^_/u     @typescript-eslint/no-unused-vars
+  18:60  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  25:36  warning  'user' is defined but never used. Allowed unused args must match /^_/u     @typescript-eslint/no-unused-vars
+  25:42  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+
+/home/hitarth/Crystal/shree-crystal-backend/src/members/controllers/members.controller.ts
+   16:3   warning  'FileTypeValidator' is defined but never used                           @typescript-eslint/no-unused-vars
+   56:26  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   58:50  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+   96:26  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   98:60  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  107:26  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  109:65  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  118:26  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+
+/home/hitarth/Crystal/shree-crystal-backend/src/members/dto/create-member.dto.ts
+  19:25  warning  'args' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  34:18  warning  'args' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/hitarth/Crystal/shree-crystal-backend/src/members/dto/update-member.dto.ts
+  1:36  warning  'ApiPropertyOptional' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/hitarth/Crystal/shree-crystal-backend/src/members/services/members.service.ts
+   94:11  warning  'rowNum' is assigned a value but never used                                                                   @typescript-eslint/no-unused-vars
+  115:23  error    'row.getCell(12).value' may use Object's default stringification format ('[object Object]') when stringified  @typescript-eslint/no-base-to-string
+  116:22  error    'row.getCell(10).value' may use Object's default stringification format ('[object Object]') when stringified  @typescript-eslint/no-base-to-string
+  140:21  error    'row.getCell(1).value' may use Object's default stringification format ('[object Object]') when stringified   @typescript-eslint/no-base-to-string
+  141:16  error    'row.getCell(3).value' may use Object's default stringification format ('[object Object]') when stringified   @typescript-eslint/no-base-to-string
+  142:19  error    'row.getCell(4).value' may use Object's default stringification format ('[object Object]') when stringified   @typescript-eslint/no-base-to-string
+  143:25  error    'row.getCell(5).value' may use Object's default stringification format ('[object Object]') when stringified   @typescript-eslint/no-base-to-string
+  144:17  error    'row.getCell(7).value' may use Object's default stringification format ('[object Object]') when stringified   @typescript-eslint/no-base-to-string
+  145:18  error    'row.getCell(8).value' may use Object's default stringification format ('[object Object]') when stringified   @typescript-eslint/no-base-to-string
+  146:20  error    'row.getCell(9).value' may use Object's default stringification format ('[object Object]') when stringified   @typescript-eslint/no-base-to-string
+  180:44  warning  Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+  195:23  warning  Unsafe argument of type `any` assigned to a parameter of type `string | number | Date`                        @typescript-eslint/no-unsafe-argument
+  202:43  warning  Unsafe argument of type `any` assigned to a parameter of type `string`                                        @typescript-eslint/no-unsafe-argument
+  203:51  warning  Unsafe argument of type `any` assigned to a parameter of type `string`                                        @typescript-eslint/no-unsafe-argument
+  274:19  warning  Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+  275:19  warning  Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+  279:19  warning  Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+
+/home/hitarth/Crystal/shree-crystal-backend/src/pending-action/pending-action.controller.ts
+  19:63  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  20:50  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  24:93  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  25:49  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+
+/home/hitarth/Crystal/shree-crystal-backend/src/pending-action/pending-action.service.spec.ts
+  85:14  error  A method that is not declared with `this: void` may cause unintentional scoping of `this` when separated from its object.
+Consider using an arrow function or explicitly `.bind()`ing the method to avoid calling the method with an unintended `this` value. 
+If a function does not access `this`, it can be annotated with `this: void`  @typescript-eslint/unbound-method
+
+/home/hitarth/Crystal/shree-crystal-backend/src/pending-action/pending-action.service.ts
+   5:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  49:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/hitarth/Crystal/shree-crystal-backend/src/statements/admin-statements.controller.ts
+  34:27  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  44:54  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  49:79  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  50:57  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  58:27  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  60:56  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  68:27  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  70:57  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+
+/home/hitarth/Crystal/shree-crystal-backend/src/statements/dto/batch-upload-statements.dto.ts
+  2:3  warning  'IsEnum' is defined but never used        @typescript-eslint/no-unused-vars
+  8:3  warning  'ArrayMinSize' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/hitarth/Crystal/shree-crystal-backend/src/statements/dto/replace-statement.dto.ts
+  1:32  warning  'IsUrl' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/hitarth/Crystal/shree-crystal-backend/src/statements/member-statements.controller.ts
+  15:51  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  17:56  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  21:73  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  22:80  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+
+/home/hitarth/Crystal/shree-crystal-backend/src/statements/statements.service.ts
+  128:58  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  166:45  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  249:18  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+  285:18  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+
+/home/hitarth/Crystal/shree-crystal-backend/test/activity-log.e2e-spec.ts
+  24:20  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  28:20  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  32:20  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  36:20  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+
+/home/hitarth/Crystal/shree-crystal-backend/test/auth.e2e-spec.ts
+   13:7   warning  'jwtService' is assigned a value but never used                      @typescript-eslint/no-unused-vars
+   34:21  warning  Unexpected any. Specify a different type                             @typescript-eslint/no-explicit-any
+   58:33  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+   78:21  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+   93:23  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  100:33  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  112:33  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  128:21  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+
+/home/hitarth/Crystal/shree-crystal-backend/test/loan-config.e2e-spec.ts
+   19:7   warning  'adminToken2' is assigned a value but never used                        @typescript-eslint/no-unused-vars
+   20:15  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   21:15  warning  Unexpected any. Specify a different type                                @typescript-eslint/no-explicit-any
+   90:37  warning  Unsafe argument of type `any` assigned to a parameter of type `App`     @typescript-eslint/no-unsafe-argument
+  154:11  warning  'patchRes' is assigned a value but never used                           @typescript-eslint/no-unused-vars
+  154:36  warning  Unsafe argument of type `any` assigned to a parameter of type `App`     @typescript-eslint/no-unsafe-argument
+  168:54  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+  171:36  warning  Unsafe argument of type `any` assigned to a parameter of type `App`     @typescript-eslint/no-unsafe-argument
+  190:36  warning  Unsafe argument of type `any` assigned to a parameter of type `App`     @typescript-eslint/no-unsafe-argument
+
+/home/hitarth/Crystal/shree-crystal-backend/test/members.e2e-spec.ts
+   18:7   warning  'encryption' is assigned a value but never used                      @typescript-eslint/no-unused-vars
+   20:18  warning  Unexpected any. Specify a different type                             @typescript-eslint/no-explicit-any
+   21:19  warning  Unexpected any. Specify a different type                             @typescript-eslint/no-explicit-any
+   72:31  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  148:37  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  163:38  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+
+/home/hitarth/Crystal/shree-crystal-backend/test/statements.e2e-spec.ts
+   32:18  warning  Unexpected any. Specify a different type                             @typescript-eslint/no-explicit-any
+   33:18  warning  Unexpected any. Specify a different type                             @typescript-eslint/no-explicit-any
+   34:21  warning  Unexpected any. Specify a different type                             @typescript-eslint/no-explicit-any
+   35:21  warning  Unexpected any. Specify a different type                             @typescript-eslint/no-explicit-any
+  136:21  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  143:33  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  152:33  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  161:33  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+
+✖ 148 problems (12 errors, 136 warnings)
+

@@ -18,7 +18,7 @@ import 'dotenv/config'; // must be first — loads .env before env-var validatio
 
 import { PrismaClient, AdminRole } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import * as argon2 from 'argon2';
+import * as bcrypt from 'bcrypt';
 
 // ---------------------------------------------------------------------------
 // Validate required env vars before doing anything
@@ -54,13 +54,8 @@ const prisma = new PrismaClient({ adapter });
 async function main(): Promise<void> {
   console.log('[seed] 🌱  Starting database seed…');
 
-  // Hash the password with argon2id (the most secure variant)
-  const passwordHash = await argon2.hash(password, {
-    type: argon2.argon2id,
-    memoryCost: 65536, // 64 MB
-    timeCost: 3,
-    parallelism: 4,
-  });
+  // Hash the password with bcrypt (cost factor 10)
+  const passwordHash = await bcrypt.hash(password, 10);
 
   // Upsert so re-running is safe in CI / after migrate reset
   const admin = await prisma.adminUser.upsert({

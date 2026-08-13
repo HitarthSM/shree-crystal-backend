@@ -78,6 +78,11 @@ enum StatementStatus {
   SUPERSEDED
 }
 
+enum BatchStatus {
+  PENDING
+  PUBLISHED
+}
+
 enum QueryStatus {
   OPEN
   IN_PROGRESS
@@ -92,6 +97,7 @@ enum PendingActionStatus {
 
 /// Generic action types supported by the maker-checker workflow
 enum ActionType {
+  MEMBER_EDIT
   MEMBER_STATUS_CHANGE
   RATE_CHANGE
   STATEMENT_BATCH_PUBLISH
@@ -133,40 +139,88 @@ enum SenderType {
   ADMIN
 }
 
+enum OtpType {
+  LOGIN
+  FORGOT_PASSWORD
+}
+
+enum InterestType {
+  FLAT
+  REDUCING
+}
+
+enum DepositType {
+  SAVINGS
+  RD
+  FD
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // MEMBER
 // ═════════════════════════════════════════════════════════════════════════════
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum ImportStatus {
+  PENDING
+  COMMITTED
+  REJECTED
+}
+
 /// Core member record. Sensitive identity fields are stored encrypted.
 /// See the encryption note at the top of this file.
 model Member {
-  id             String       @id @default(cuid())
-  /// Unique society-issued membership number (e.g. "SCR-0001")
-  memberNumber   String       @unique
-  name           String
-  phone          String       @unique
-  email          String?      @unique
+  id                  String       @id @default(cuid())
+  /// Unique society-issued membership number (e.g. "SCC-00001")
+  memberId            String       @unique
+  fullName            String
+  fatherOrHusbandName String?
+  dob                 DateTime
+  gender              Gender
+  addressLine1        String
+  addressLine2        String?
+  city                String
+  state               String
+  pincode             String
+  mobile              String       @unique
+  email               String?      @unique
+  /// Deterministic hash for uniqueness check
+  aadhaarHash         String       @unique
   /// AES-256-GCM encrypted Aadhaar number — NEVER stored as plain text
-  aadhaarEncrypted String?   @map("aadhaar_encrypted")
+  aadhaarEncrypted    String       @map("aadhaar_encrypted")
   /// AES-256-GCM encrypted PAN number — NEVER stored as plain text
-  panEncrypted   String?      @map("pan_encrypted")
-  address        String?
+  panEncrypted        String?      @map("pan_encrypted")
   /// Profile / KYC document URL (stored in object storage, not inline)
-  profilePhotoUrl String?
-  status         MemberStatus @default(ACTIVE)
-  joinedAt       DateTime     @default(now())
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  photoUrl            String?
+  nomineeName         String?
+  nomineeRelation     String?
+  nomineeContact      String?
+  membershipDate      DateTime     @default(now())
+  shareCapital        Decimal      @default(0) @db.Decimal(14, 2)
+  status              MemberStatus @default(ACTIVE)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  // Auth & Session
+  passwordHash   String?
+  isFirstLogin   Boolean   @default(true)
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  sessionVersion Int       @default(1)
 
   // Relations
-  statements         Statement[]
-  noticeDeliveries   NoticeDelivery[]
-  loans              MemberLoan[]
-  supportQueries     SupportQuery[]
-  changeRequests     MemberChangeRequest[]
+  statements       Statement[]
+  noticeDeliveries NoticeDelivery[]
+  loans            MemberLoan[]
+  supportQueries   SupportQuery[]
+  changeRequests   MemberChangeRequest[]
 
   @@index([status])
-  @@index([memberNumber])
+  @@index([memberId])
   @@map("members")
 }
 
@@ -187,12 +241,22 @@ model AdminUser {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  // Auth & Session
+  isFirstLogin   Boolean   @default(true)
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  sessionVersion Int       @default(1)
+
   // Relations — admin may have made/checked many pending actions
-  actionsMade     PendingAction[] @relation("ActionMadeBy")
-  actionsChecked  PendingAction[] @relation("ActionCheckedBy")
-  rateHistorySet  RateHistory[]
-  settingsUpdated Settings[]
-  resolvedRequests MemberChangeRequest[] @relation("RequestResolvedBy")
+  actionsMade        PendingAction[]       @relation("ActionMadeBy")
+  actionsChecked     PendingAction[]       @relation("ActionCheckedBy")
+  rateChangesMade    RateHistory[]         @relation("RateChangedBy")
+  rateChangesApproved RateHistory[]        @relation("RateApprovedBy")
+  settingsUpdated    Settings[]
+  resolvedRequests   MemberChangeRequest[] @relation("RequestResolvedBy")
+  importBatches      ImportBatch[]
+  statementsUploaded Statement[]
+  statementBatches   StatementBatch[]
 
   @@index([email])
   @@index([role])
@@ -206,22 +270,52 @@ model AdminUser {
 /// Periodic account statements generated for members (monthly / annual).
 /// Withdrawn / superseded statements keep their row; only status changes.
 model Statement {
-  id          String          @id @default(cuid())
-  memberId    String
+  id           String          @id @default(cuid())
+  memberId     String
   /// Human-readable period label e.g. "2024-03" or "2023-2024"
-  period      String
+  period       String
+  category     String
   /// URL to the PDF stored in object storage
-  fileUrl     String
-  status      StatementStatus @default(PUBLISHED)
-  publishedAt DateTime        @default(now())
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  fileUrl      String
+  status       StatementStatus @default(PUBLISHED)
+  uploadedById String
+  publishedAt  DateTime?       @default(now())
+  supersedesId String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 
-  member Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  member       Member      @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  uploadedBy   AdminUser   @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  supersedes   Statement?  @relation("StatementSupersedes", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy Statement[] @relation("StatementSupersedes")
 
   @@index([memberId])
   @@index([period])
   @@map("statements")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// STATEMENT BATCH
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Batch preview for statement uploads
+model StatementBatch {
+  id                String      @id @default(cuid())
+  adminId           String
+  period            String
+  category          String
+  matchedCount      Int         @default(0)
+  unmatchedList     Json
+  matchedStatements Json
+  status            BatchStatus @default(PENDING)
+  createdAt         DateTime    @default(now())
+  publishedAt       DateTime?
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([adminId])
+  @@index([status])
+  @@map("statement_batches")
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -230,17 +324,17 @@ model Statement {
 
 /// Society-wide notices / announcements. isActive = false = soft-archived.
 model Notice {
-  id          String         @id @default(cuid())
-  title       String
-  body        String         @db.Text
-  category    NoticeCategory @default(GENERAL)
-  publishedAt DateTime       @default(now())
-  expiresAt   DateTime?
-  isActive    Boolean        @default(true)
+  id            String         @id @default(cuid())
+  title         String
+  body          String         @db.Text
+  category      NoticeCategory @default(GENERAL)
+  publishedAt   DateTime       @default(now())
+  expiresAt     DateTime?
+  isActive      Boolean        @default(true)
   /// Optional URL attachment (e.g. AGM agenda PDF)
   attachmentUrl String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   deliveries NoticeDelivery[]
 
@@ -255,15 +349,15 @@ model Notice {
 
 /// Tracks per-member, per-channel dispatch of a notice.
 model NoticeDelivery {
-  id       String         @id @default(cuid())
-  noticeId String
-  memberId String
-  channel  NoticeChannel
-  status   DeliveryStatus @default(PENDING)
-  sentAt   DateTime?
+  id        String         @id @default(cuid())
+  noticeId  String
+  memberId  String
+  channel   NoticeChannel
+  status    DeliveryStatus @default(PENDING)
+  sentAt    DateTime?
   /// Error message if delivery failed (for retry / audit)
-  errorMsg String?
-  createdAt DateTime      @default(now())
+  errorMsg  String?
+  createdAt DateTime       @default(now())
 
   notice Notice @relation(fields: [noticeId], references: [id], onDelete: Restrict)
   member Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
@@ -310,23 +404,21 @@ model ActivityLog {
 /// Master definition of a loan product. Rates here are *current display* only.
 /// Historical rates are tracked in RateHistory.
 model LoanType {
-  id                   String   @id @default(cuid())
-  name                 String   @unique
-  /// Current annual interest rate (%) — for display / new loan defaults only
-  defaultInterestRate  Decimal  @db.Decimal(6, 4)
-  /// Current annual penalty rate (%) for overdue repayments
-  defaultPenaltyRate   Decimal  @db.Decimal(6, 4)
-  description          String?
-  /// Max tenure allowed in months (null = no cap)
-  maxTenureMonths      Int?
-  isActive             Boolean  @default(true)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id              String       @id @default(cuid())
+  name            String       @unique
+  interestRate    Decimal      @db.Decimal(6, 4)
+  interestType    InterestType @default(REDUCING)
+  maxTenure       Int?
+  processingFee   Decimal      @db.Decimal(14, 2)
+  minAmount       Decimal      @db.Decimal(14, 2)
+  maxAmount       Decimal      @db.Decimal(14, 2)
+  active          Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   loans       MemberLoan[]
-  rateHistory RateHistory[]
 
-  @@index([isActive])
+  @@index([active])
   @@map("loan_types")
 }
 
@@ -336,20 +428,16 @@ model LoanType {
 
 /// Master definition of a deposit / savings product.
 model DepositScheme {
-  id                  String   @id @default(cuid())
-  name                String   @unique
-  /// Current annual interest rate (%) — display only
-  defaultInterestRate Decimal  @db.Decimal(6, 4)
-  /// Tenure in months (null = open-ended / flexi)
-  tenureMonths        Int?
-  description         String?
-  isActive            Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id              String       @id @default(cuid())
+  name            String       @unique
+  type            DepositType  @default(SAVINGS)
+  interestRate    Decimal      @db.Decimal(6, 4)
+  tenureOptions   Json?
+  active          Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
-  rateHistory RateHistory[]
-
-  @@index([isActive])
+  @@index([active])
   @@map("deposit_schemes")
 }
 
@@ -357,32 +445,25 @@ model DepositScheme {
 // RATE HISTORY
 // ═════════════════════════════════════════════════════════════════════════════
 
-/// Immutable log of every interest-rate change for any loan type or deposit
-/// scheme. effectiveTo = null means the rate is still active.
-/// MemberLoan.rateHistoryId links to the snapshot active at disbursement.
+/// Ledger of approved rate changes. 
 model RateHistory {
   id            String         @id @default(cuid())
-  entityType    RateEntityType
-  /// FK to either LoanType.id or DepositScheme.id (stored as plain string
-  /// because Prisma cannot express a polymorphic FK natively)
-  entityId      String
-  interestRate  Decimal        @db.Decimal(6, 4)
-  /// Penalty rate (only applicable for loan-type histories)
-  penaltyRate   Decimal?       @db.Decimal(6, 4)
-  effectiveFrom DateTime       @default(now())
-  /// null = this is the currently active rate
-  effectiveTo   DateTime?
-  setByAdminId  String
+  schemeId      String
+  schemeType    RateEntityType
+  oldRate       Decimal?       @db.Decimal(6, 4)
+  newRate       Decimal        @db.Decimal(6, 4)
+  effectiveFrom DateTime
+  changedById   String
+  approvedById  String?
   createdAt     DateTime       @default(now())
 
-  setByAdmin AdminUser    @relation(fields: [setByAdminId], references: [id], onDelete: Restrict)
-  loanType   LoanType?    @relation(fields: [entityId], references: [id], map: "rate_history_loan_type_fk")
-  depositScheme DepositScheme? @relation(fields: [entityId], references: [id], map: "rate_history_deposit_scheme_fk")
-  loans      MemberLoan[]
+  changedBy     AdminUser      @relation("RateChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+  approvedBy    AdminUser?     @relation("RateApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
 
-  @@index([entityType, entityId])
+  loans         MemberLoan[]
+
+  @@index([schemeType, schemeId])
   @@index([effectiveFrom])
-  @@index([effectiveTo])
   @@map("rate_history")
 }
 
@@ -407,9 +488,9 @@ model MemberLoan {
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
-  member      Member        @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  loanType    LoanType      @relation(fields: [loanTypeId], references: [id], onDelete: Restrict)
-  rateHistory RateHistory   @relation(fields: [rateHistoryId], references: [id], onDelete: Restrict)
+  member      Member          @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  loanType    LoanType        @relation(fields: [loanTypeId], references: [id], onDelete: Restrict)
+  rateHistory RateHistory     @relation(fields: [rateHistoryId], references: [id], onDelete: Restrict)
   repayments  LoanRepayment[]
 
   @@index([memberId])
@@ -450,18 +531,18 @@ model LoanRepayment {
 /// statement batch publishes, and any other two-eyes approval workflow.
 /// checkedBy and resolvedAt are null until the action is resolved.
 model PendingAction {
-  id         String              @id @default(cuid())
-  actionType ActionType
+  id          String              @id @default(cuid())
+  actionType  ActionType
   /// Arbitrary JSON payload describing the action (before/after values, IDs, etc.)
-  payload    Json
-  status     PendingActionStatus @default(PENDING)
+  payload     Json
+  status      PendingActionStatus @default(PENDING)
   /// Admin who initiated the action
-  madeById   String
+  madeById    String
   /// Admin who approved or rejected (null until resolved)
   checkedById String?
-  createdAt  DateTime            @default(now())
+  createdAt   DateTime            @default(now())
   /// null until the action is approved or rejected
-  resolvedAt DateTime?
+  resolvedAt  DateTime?
   /// Optional human-readable note from the checker
   checkerNote String?
 
@@ -480,12 +561,13 @@ model PendingAction {
 
 /// A member's support / grievance ticket. Closed tickets keep their row.
 model SupportQuery {
-  id        String      @id @default(cuid())
-  memberId  String
-  subject   String
-  status    QueryStatus @default(OPEN)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id         String      @id @default(cuid())
+  memberId   String
+  subject    String
+  status     QueryStatus @default(OPEN)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  resolvedAt DateTime?
 
   member   Member         @relation(fields: [memberId], references: [id], onDelete: Restrict)
   messages QueryMessage[]
@@ -501,14 +583,15 @@ model SupportQuery {
 
 /// Individual messages in a support query thread (member ↔ admin).
 model QueryMessage {
-  id         String     @id @default(cuid())
-  queryId    String
-  senderType SenderType
+  id            String     @id @default(cuid())
+  queryId       String
+  senderType    SenderType
   /// ID of the sender (Member.id or AdminUser.id)
-  senderId   String
-  body       String     @db.Text
-  sentAt     DateTime   @default(now())
-  createdAt  DateTime   @default(now())
+  senderId      String
+  message       String     @db.Text
+  attachmentUrl String?
+  sentAt        DateTime   @default(now())
+  createdAt     DateTime   @default(now())
 
   query SupportQuery @relation(fields: [queryId], references: [id], onDelete: Restrict)
 
@@ -523,20 +606,20 @@ model QueryMessage {
 /// A member's request to update their own profile fields (e.g. address, phone).
 /// Requires admin approval before the change is applied to the Member row.
 model MemberChangeRequest {
-  id          String              @id @default(cuid())
-  memberId    String
+  id           String              @id @default(cuid())
+  memberId     String
   /// Name of the field the member wants to change (e.g. "address", "email")
-  fieldName   String
+  fieldName    String
   /// JSON-serialised previous value (for audit)
-  oldValue    String?
+  oldValue     String?
   /// JSON-serialised requested new value
-  newValue    String
-  status      ChangeRequestStatus @default(PENDING)
-  requestedAt DateTime            @default(now())
+  newValue     String
+  status       ChangeRequestStatus @default(PENDING)
+  requestedAt  DateTime            @default(now())
   /// null until approved or rejected
-  resolvedAt  DateTime?
+  resolvedAt   DateTime?
   resolvedById String?
-  createdAt   DateTime            @default(now())
+  createdAt    DateTime            @default(now())
 
   member     Member     @relation(fields: [memberId], references: [id], onDelete: Restrict)
   resolvedBy AdminUser? @relation("RequestResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
@@ -553,16 +636,62 @@ model MemberChangeRequest {
 /// Key-value store for global application settings (e.g. interest-cycle day,
 /// SMS templates, feature flags). A single row per key; keys are never deleted.
 model Settings {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   /// Unique settings key (e.g. "interest.cycle.day", "feature.sms.enabled")
-  key         String    @unique
+  key         String   @unique
   /// Arbitrary JSON value — can be a primitive, object, or array
   value       Json
   description String?
-  updatedAt   DateTime  @updatedAt
+  updatedAt   DateTime @updatedAt
   updatedById String?
 
   updatedBy AdminUser? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@map("settings")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// AUTH OTP
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Temporary OTPs for login and forgot-password flows.
+model AuthOtp {
+  id         String   @id @default(cuid())
+  /// Can be memberNumber, phone, or email
+  identifier String
+  /// Hashed OTP
+  otpHash    String
+  type       OtpType
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([identifier])
+  @@map("auth_otps")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// IMPORT BATCH
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Bulk import batch for members or other entities
+model ImportBatch {
+  id          String       @id @default(cuid())
+  filename    String
+  adminId     String
+  totalRows   Int
+  validRows   Int
+  invalidRows Int
+  /// JSON-serialised array of valid records ready to be committed
+  previewData Json?
+  /// JSON-serialised array of row-level errors
+  errorList   Json?
+  status      ImportStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  committedAt DateTime?
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([adminId])
+  @@index([status])
+  @@map("import_batches")
 }

@@ -1,0 +1,2 @@
+// queries module — placeholder
+export {};

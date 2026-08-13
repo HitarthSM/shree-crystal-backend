@@ -1,0 +1,2 @@
+// common/pipes — placeholder
+export {};
