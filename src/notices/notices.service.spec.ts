@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NoticesService } from './notices.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
-import { GATEWAY_TOKEN } from '../common/services/gateways/gateway.token.js';
+import { NotificationService } from '../common/services/notification.service.js';
 import { DeliveryStatus, NoticeChannel } from '@prisma/client';
 
 describe('NoticesService', () => {
@@ -31,7 +31,7 @@ describe('NoticesService', () => {
       providers: [
         NoticesService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: GATEWAY_TOKEN, useValue: mockGateway },
+        { provide: NotificationService, useValue: mockGateway },
       ],
     }).compile();
 
@@ -71,7 +71,7 @@ describe('NoticesService', () => {
 
     // Verify 48 successes
     const successfulUpdates = mockPrisma.noticeDelivery.update.mock.calls.filter(
-      (call) => call[0].data.status === DeliveryStatus.DELIVERED,
+      (call) => call[0].data.status === DeliveryStatus.SENT,
     );
     expect(successfulUpdates).toHaveLength(48);
 

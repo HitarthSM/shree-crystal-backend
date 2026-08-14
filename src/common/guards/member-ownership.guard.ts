@@ -42,7 +42,13 @@ export class MemberOwnershipGuard implements CanActivate {
 
     if (!paramMemberId) {
       // If the route explicitly uses /me, it is self-scoped and safe.
-      if (request.route && request.route.path && request.route.path.includes('/me')) {
+      console.log(
+        'MemberOwnershipGuard debug: request.path =',
+        request.path,
+        'request.url =',
+        request.url,
+      );
+      if (request.path && request.path.includes('/me')) {
         return true;
       }
 

@@ -121,6 +121,24 @@ export class QueriesService {
 
   // ─── ADMIN METHODS ─────────────────────────────────────────────────────────
 
+  async getAdminQueryById(queryId: string) {
+    const query = await this.prisma.supportQuery.findUnique({
+      where: { id: queryId },
+      include: {
+        member: { select: { fullName: true, memberId: true } },
+        messages: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!query) {
+      throw new NotFoundException('Query not found');
+    }
+
+    return query;
+  }
+
   async getAdminQueries(filterDto: QueryFilterDto) {
     const { status } = filterDto;
     return this.prisma.supportQuery.findMany({

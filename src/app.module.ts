@@ -21,8 +21,9 @@ import { ActivityLogModule } from './activity-log/activity-log.module.js';
 import { LoanConfigModule } from './loan-config/loan-config.module.js';
 import { QueriesModule } from './queries/queries.module.js';
 import { SettingsModule } from './settings/settings.module.js';
-import { GatewaysModule } from './common/services/gateways/gateways.module.js';
+import { NotificationModule } from './common/services/notification.module.js';
 import { NoticesModule } from './notices/notices.module.js';
+import { DashboardModule } from './dashboard/dashboard.module.js';
 @Module({
   imports: [
     // ── Config (global, validated) ─────────────────────────────────────────
@@ -60,7 +61,7 @@ import { NoticesModule } from './notices/notices.module.js';
     PendingActionModule,
 
     SettingsModule,
-    GatewaysModule,
+    NotificationModule,
     NoticesModule,
     AdminUsersModule,
     MembersModule,
@@ -68,6 +69,7 @@ import { NoticesModule } from './notices/notices.module.js';
     ActivityLogModule,
     LoanConfigModule,
     QueriesModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

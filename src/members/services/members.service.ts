@@ -73,7 +73,9 @@ export class MembersService {
         nomineeName: dto.nomineeName,
         nomineeRelation: dto.nomineeRelation,
         nomineeContact: dto.nomineeContact,
-        // password temp will be generated or user uses OTP for first login
+        shareCapital: dto.shareCapital
+          ? new Prisma.Decimal(dto.shareCapital)
+          : new Prisma.Decimal(0),
       },
     });
 

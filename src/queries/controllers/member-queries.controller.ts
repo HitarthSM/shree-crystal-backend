@@ -14,25 +14,25 @@ export class MemberQueriesController {
 
   @Post()
   async createQuery(@CurrentUser() user: any, @Body() dto: CreateQueryDto) {
-    return this.queriesService.createMemberQuery(user.memberId, dto);
+    return this.queriesService.createMemberQuery(user.userId, dto);
   }
 
   @Get('me')
   @UseGuards(MemberOwnershipGuard)
   async getMyQueries(@CurrentUser() user: any) {
-    return this.queriesService.getMemberQueries(user.memberId);
+    return this.queriesService.getMemberQueries(user.userId);
   }
 
   @Get('me/:id')
   @UseGuards(MemberOwnershipGuard)
   async getMyQueryById(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.queriesService.getMemberQueryById(user.memberId, id);
+    return this.queriesService.getMemberQueryById(user.userId, id);
   }
 
   @Post('me/:id/reopen')
   @UseGuards(MemberOwnershipGuard)
   async reopenMyQuery(@CurrentUser() user: any, @Param('id') id: string) {
-    return this.queriesService.reopenMemberQuery(user.memberId, id);
+    return this.queriesService.reopenMemberQuery(user.userId, id);
   }
 
   @Post(':id/messages')
@@ -48,6 +48,6 @@ export class MemberQueriesController {
     }
 
     // Fallback to member
-    return this.queriesService.addMemberMessage(user.memberId, id, dto);
+    return this.queriesService.addMemberMessage(user.userId, id, dto);
   }
 }

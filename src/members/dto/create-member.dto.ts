@@ -113,4 +113,9 @@ export class CreateMemberDto {
   @IsString()
   @IsOptional()
   nomineeContact?: string;
+
+  @ApiPropertyOptional({ description: 'Initial share capital as string (decimal)' })
+  @IsString()
+  @IsOptional()
+  shareCapital?: string;
 }

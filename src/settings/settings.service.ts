@@ -1,8 +1,7 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { ModuleRef } from '@nestjs/core';
-import { NotificationGateway } from '../common/services/gateways/notification-gateway.interface.js';
-import { GATEWAY_TOKEN } from '../common/services/gateways/gateway.token.js';
+import { NotificationService } from '../common/services/notification.service.js';
 import { SocietyDetailsDto } from './dto/society-details.dto.js';
 import {
   NotificationGatewayDto,
@@ -44,7 +43,7 @@ export class SettingsService {
   async updateSetting(key: string, value: any, adminId?: string): Promise<void> {
     // If it's a gateway credential, test it first
     if (key === 'notification.sms.apiKey' && value) {
-      const gateway = this.moduleRef.get<NotificationGateway>(GATEWAY_TOKEN, { strict: false });
+      const gateway = this.moduleRef.get(NotificationService, { strict: false });
       const testPhone =
         (await this.getSetting<string>('notification.sms.testNumber')) || '+1234567890';
       this.logger.log(`Testing new SMS API key by sending a test message to ${testPhone}`);
@@ -59,7 +58,7 @@ export class SettingsService {
     }
 
     if (key === 'notification.email.smtpUrl' && value) {
-      const gateway = this.moduleRef.get<NotificationGateway>(GATEWAY_TOKEN, { strict: false });
+      const gateway = this.moduleRef.get(NotificationService, { strict: false });
       const testEmail =
         (await this.getSetting<string>('notification.email.testEmail')) || 'test@example.com';
       this.logger.log(`Testing new SMTP URL by sending a test email to ${testEmail}`);

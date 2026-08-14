@@ -1,7 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service.js';
-import type { NotificationGateway } from '../common/services/gateways/notification-gateway.interface.js';
-import { GATEWAY_TOKEN } from '../common/services/gateways/gateway.token.js';
+import { NotificationService } from '../common/services/notification.service.js';
 import { DeliveryStatus } from '@prisma/client';
 
 @Injectable()
@@ -10,8 +9,107 @@ export class NoticesService {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(GATEWAY_TOKEN) private readonly gateway: NotificationGateway,
+    private readonly gateway: NotificationService,
   ) {}
+
+  async create(dto: any) {
+    const notice = await this.prisma.notice.create({
+      data: {
+        title: dto.title,
+        body: dto.body,
+        category: dto.category || 'GENERAL',
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+        attachmentUrl: dto.attachmentUrl,
+        isActive: true,
+      },
+    });
+
+    // Automatically enqueue deliveries for all active members (based on Phase 3 implementation plan)
+    const activeMembers = await this.prisma.member.findMany({
+      where: { status: 'ACTIVE' },
+    });
+
+    if (activeMembers.length > 0) {
+      const deliveries = activeMembers.map((member) => ({
+        noticeId: notice.id,
+        memberId: member.id,
+        channel: member.mobile ? 'SMS' : 'EMAIL',
+      })) as any[];
+
+      await this.prisma.noticeDelivery.createMany({
+        data: deliveries,
+        skipDuplicates: true,
+      });
+
+      // Fire and forget dispatch (in background)
+      this.dispatchNotice(notice.id).catch((err) =>
+        this.logger.error(`Background dispatch failed for notice ${notice.id}`, err),
+      );
+    }
+
+    return notice;
+  }
+
+  async findAll(page = 1, limit = 10, category?: string) {
+    const skip = (page - 1) * limit;
+    const where: any = { isActive: true };
+    if (category) {
+      where.category = category;
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.notice.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.notice.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getMemberNotices(memberId: string) {
+    const deliveries = await this.prisma.noticeDelivery.findMany({
+      where: {
+        memberId,
+        notice: { isActive: true },
+      },
+      include: { notice: true },
+      orderBy: { notice: { createdAt: 'desc' } },
+    });
+
+    return deliveries;
+  }
+
+  async update(id: string, dto: any) {
+    return this.prisma.notice.update({
+      where: { id },
+      data: {
+        title: dto.title,
+        body: dto.body,
+        category: dto.category,
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
+        attachmentUrl: dto.attachmentUrl,
+      },
+    });
+  }
+
+  async softDelete(id: string) {
+    return this.prisma.notice.update({
+      where: { id },
+      data: { isActive: false },
+    });
+  }
 
   /**
    * Dispatches pending notice deliveries for a given notice ID.

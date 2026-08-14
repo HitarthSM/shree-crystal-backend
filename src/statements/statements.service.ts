@@ -242,6 +242,34 @@ export class StatementsService {
     return updated;
   }
 
+  async findBatches(query: any) {
+    const { page = 1, limit = 10, status } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (status) where.status = status;
+
+    const [data, total] = await Promise.all([
+      this.prisma.statementBatch.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.statementBatch.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
   async findAdminStatements(query: StatementQueryDto) {
     const { page = 1, limit = 10, memberId, period, category, status } = query;
     const skip = (page - 1) * limit;

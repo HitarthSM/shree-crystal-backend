@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BackupService } from './backup.service.js';
 import { SettingsService } from '../settings.service.js';
 import { ModuleRef } from '@nestjs/core';
-import { GATEWAY_TOKEN } from '../../common/services/gateways/gateway.token.js';
+import { NotificationService } from '../../common/services/notification.service.js';
 
 describe('BackupService', () => {
   let service: BackupService;
@@ -78,7 +78,7 @@ describe('BackupService', () => {
       );
 
       // Verify gateway was fetched
-      expect(moduleRef.get).toHaveBeenCalledWith(GATEWAY_TOKEN, { strict: false });
+      expect(moduleRef.get).toHaveBeenCalledWith(NotificationService, { strict: false });
 
       // Verify email and SMS were sent
       expect(mockGateway.sendEmail).toHaveBeenCalledWith(

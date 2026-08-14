@@ -1,1 +1,0 @@
-export const GATEWAY_TOKEN = 'NOTIFICATION_GATEWAY';

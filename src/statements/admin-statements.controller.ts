@@ -70,6 +70,12 @@ export class AdminStatementsController {
     return this.statementsService.withdrawStatement(id, admin.id, dto);
   }
 
+  @Get('batches')
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR, AdminRole.VIEWER)
+  async findBatches(@Query() query: any) {
+    return this.statementsService.findBatches(query);
+  }
+
   @Get()
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR, AdminRole.VIEWER)
   async findAdminStatements(@Query() query: StatementQueryDto) {

@@ -18,4 +18,25 @@ export class AdminQueriesController {
   async getAllQueries(@Query() filterDto: QueryFilterDto) {
     return this.queriesService.getAdminQueries(filterDto);
   }
+
+  @Get(':id')
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR, AdminRole.VIEWER)
+  async getQueryById(@Param('id') id: string) {
+    // The service doesn't have a specific admin GetById method,
+    // but we can query it using Prisma directly here, or add it to the service.
+    // Wait, let's look at the queries service again. It has getMemberQueryById,
+    // but an admin should be able to view any query. Let's just use Prisma directly here or
+    // we can use the service method if we create it. Actually, I will update the service too.
+    return this.queriesService.getAdminQueryById(id);
+  }
+
+  @Post(':id/reply')
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
+  async replyToQuery(
+    @Param('id') id: string,
+    @Body() replyDto: AdminReplyDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.queriesService.addAdminReply(user.userId, id, replyDto);
+  }
 }
