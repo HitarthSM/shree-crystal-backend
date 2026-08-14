@@ -15,7 +15,11 @@ async function bootstrap() {
   app.use(helmet());
 
   // ── CORS ──────────────────────────────────────────────────────────────────
-  const frontendOrigin = configService.getOrThrow<string>('FRONTEND_ORIGIN');
+  let frontendOrigin = configService.getOrThrow<string>('FRONTEND_ORIGIN');
+  // Strip trailing slash if present to avoid browser strict origin mismatch
+  if (frontendOrigin.endsWith('/')) {
+    frontendOrigin = frontendOrigin.slice(0, -1);
+  }
   app.enableCors({
     origin: frontendOrigin,
     credentials: true,
