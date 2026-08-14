@@ -24,7 +24,7 @@ export class LoanConfigController {
     return this.loanConfigService.getActiveRates();
   }
 
-  @Public() // The user says "landing page calculator needs it", so maybe public? Member endpoint means they are logged in? The prompt says "Member: GET /loan-config/calculate". I'll add JwtAuthGuard and allow members. Wait, if it's member, maybe it should be protected by AuthGuard? Actually, I'll just make it Public for now so anyone can use it. But wait, "Endpoints (member)" vs "Endpoints (admin)". I'll make it Public since a landing page might use it too. Or I can use `@UseGuards(JwtAuthGuard)` but it's fine as Public.
+  @Public()
   @Get('calculate')
   async calculateLoan(@Query() query: CalculateLoanDto) {
     return this.loanConfigService.calculateMemberLoan(query);
@@ -33,8 +33,8 @@ export class LoanConfigController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
   @Post('loan-types')
-  async createLoanType(@Body() dto: CreateLoanTypeDto, @CurrentUser() user: any) {
-    return this.loanConfigService.createLoanType(dto, user.id);
+  async createLoanType(@Body() dto: CreateLoanTypeDto) {
+    return this.loanConfigService.createLoanType(dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -51,8 +51,8 @@ export class LoanConfigController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
   @Post('deposit-schemes')
-  async createDepositScheme(@Body() dto: CreateDepositSchemeDto, @CurrentUser() user: any) {
-    return this.loanConfigService.createDepositScheme(dto, user.id);
+  async createDepositScheme(@Body() dto: CreateDepositSchemeDto) {
+    return this.loanConfigService.createDepositScheme(dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

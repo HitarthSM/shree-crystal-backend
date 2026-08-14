@@ -1,7 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PendingActionService } from '../pending-action/pending-action.service';
-import { LoanConfigActionHandler, RateChangePayload } from './loan-config-action.handler';
 import {
   CreateLoanTypeDto,
   UpdateLoanTypeDto,
@@ -11,20 +10,30 @@ import {
 } from './dto';
 import { ActionType, RateEntityType, InterestType } from '@prisma/client';
 
+export type RateChangePayload = {
+  schemeId: string;
+  schemeType: RateEntityType;
+  oldRate: number | null;
+  newRate: number;
+  effectiveFrom: string; // ISO String
+  changedById: string;
+  data: any; // Other fields that changed
+};
+
 @Injectable()
 export class LoanConfigService {
+  private readonly logger = new Logger(LoanConfigService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly pendingActionService: PendingActionService,
-    private readonly actionHandler: LoanConfigActionHandler,
   ) {
     this.pendingActionService.registerHandler(ActionType.RATE_CHANGE, (payload, checkedById) =>
-      this.actionHandler.handleRateChange(payload, checkedById!),
+      this.handleRateChange(payload as RateChangePayload, checkedById!),
     );
-    // Let's use RATE_CHANGE for both loan and deposit rate changes as the payload schema is generic
     this.pendingActionService.registerHandler(
       ActionType.DEPOSIT_SCHEME_CHANGE,
-      (payload, checkedById) => this.actionHandler.handleRateChange(payload, checkedById!),
+      (payload, checkedById) => this.handleRateChange(payload as RateChangePayload, checkedById!),
     );
   }
 
@@ -96,7 +105,7 @@ export class LoanConfigService {
 
   // --- Admin Endpoints ---
 
-  async createLoanType(dto: CreateLoanTypeDto, adminId: string) {
+  async createLoanType(dto: CreateLoanTypeDto) {
     return this.prisma.loanType.create({
       data: dto,
     });
@@ -134,12 +143,12 @@ export class LoanConfigService {
       await this.pendingActionService.propose(ActionType.RATE_CHANGE, payload, adminId);
       return { message: 'Update proposed for maker-checker approval.' };
     } else {
-      await this.actionHandler.handleRateChange(payload, adminId);
+      await this.handleRateChange(payload, adminId);
       return { message: 'Update applied immediately.' };
     }
   }
 
-  async createDepositScheme(dto: CreateDepositSchemeDto, adminId: string) {
+  async createDepositScheme(dto: CreateDepositSchemeDto) {
     return this.prisma.depositScheme.create({
       data: dto,
     });
@@ -174,8 +183,68 @@ export class LoanConfigService {
       await this.pendingActionService.propose(ActionType.DEPOSIT_SCHEME_CHANGE, payload, adminId);
       return { message: 'Update proposed for maker-checker approval.' };
     } else {
-      await this.actionHandler.handleRateChange(payload, adminId);
+      await this.handleRateChange(payload, adminId);
       return { message: 'Update applied immediately.' };
+    }
+  }
+
+  async handleRateChange(payload: RateChangePayload, approvedById: string) {
+    this.logger.log(`Handling rate change for ${payload.schemeType} ${payload.schemeId}`);
+
+    const effectiveFromDate = new Date(payload.effectiveFrom);
+    const now = new Date();
+
+    await this.prisma.rateHistory.create({
+      data: {
+        schemeId: payload.schemeId,
+        schemeType: payload.schemeType,
+        oldRate: payload.oldRate,
+        newRate: payload.newRate,
+        effectiveFrom: effectiveFromDate,
+        changedById: payload.changedById,
+        approvedById: approvedById,
+      },
+    });
+
+    if (effectiveFromDate <= now) {
+      if (payload.schemeType === RateEntityType.LOAN_TYPE) {
+        await this.prisma.loanType.update({
+          where: { id: payload.schemeId },
+          data: {
+            ...payload.data,
+            interestRate: payload.newRate,
+          },
+        });
+      } else {
+        await this.prisma.depositScheme.update({
+          where: { id: payload.schemeId },
+          data: {
+            ...payload.data,
+            interestRate: payload.newRate,
+          },
+        });
+      }
+      this.logger.log(`Applied rate change to ${payload.schemeType} immediately.`);
+    } else {
+      const dataWithoutRate = { ...payload.data };
+      delete dataWithoutRate.interestRate;
+
+      if (Object.keys(dataWithoutRate).length > 0) {
+        if (payload.schemeType === RateEntityType.LOAN_TYPE) {
+          await this.prisma.loanType.update({
+            where: { id: payload.schemeId },
+            data: dataWithoutRate,
+          });
+        } else {
+          await this.prisma.depositScheme.update({
+            where: { id: payload.schemeId },
+            data: dataWithoutRate,
+          });
+        }
+      }
+      this.logger.log(
+        `Rate is in future (${effectiveFromDate.toISOString()}), scheduled job will apply it. Applied other fields immediately.`,
+      );
     }
   }
 }
