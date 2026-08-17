@@ -5,6 +5,7 @@ import { CreateMemberDto } from '../dto/create-member.dto.js';
 import { UpdateMemberDto } from '../dto/update-member.dto.js';
 import { Prisma, MemberStatus, ActionType, ImportStatus } from '@prisma/client';
 import * as XLSX from 'xlsx';
+import * as bcrypt from 'bcrypt';
 import { PendingActionService } from '../../pending-action/pending-action.service.js';
 
 @Injectable()
@@ -52,10 +53,12 @@ export class MembersService {
     const memberId = await this.generateMemberId();
     const aadhaarEncrypted = this.encryption.encrypt(dto.aadhaar);
     const panEncrypted = dto.pan ? this.encryption.encrypt(dto.pan) : null;
+    const defaultPasswordHash = await bcrypt.hash('Shree@123', 10);
 
     const member = await this.prisma.member.create({
       data: {
         memberId,
+        passwordHash: defaultPasswordHash,
         fullName: dto.fullName,
         fatherOrHusbandName: dto.fatherOrHusbandName,
         dob: new Date(dto.dob),
@@ -206,6 +209,8 @@ export class MembersService {
 
     const validRows = batch.previewData as any[];
 
+    const defaultPasswordHash = await bcrypt.hash('Shree@123', 10);
+
     const membersToCreate = validRows.map((row) => {
       // Use the memberNo directly from the Excel file to ensure it matches statements!
       const memberId = row.memberNo
@@ -214,6 +219,7 @@ export class MembersService {
 
       return {
         memberId,
+        passwordHash: defaultPasswordHash,
         fullName: row.fullName || 'Unknown',
         dob: new Date(row.dob || '1970-01-01'),
         gender: row.gender === 'MALE' || row.gender === 'FEMALE' ? row.gender : 'OTHER',
