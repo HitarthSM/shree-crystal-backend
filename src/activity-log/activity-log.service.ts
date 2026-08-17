@@ -3,7 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { GetActivityLogDto } from './dto/get-activity-log.dto';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { ActivityLog, Prisma } from '@prisma/client';
-import * as ExcelJS from 'exceljs';
+import * as XLSX from 'xlsx';
 import { Response } from 'express';
 
 @Injectable()
@@ -58,32 +58,20 @@ export class ActivityLogService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Activity Logs');
+    const exportData = items.map((item) => ({
+      ID: item.id,
+      'Actor ID': item.actorId,
+      'Actor Type': item.actorType,
+      Action: item.action,
+      'Entity Type': item.entityType,
+      'Entity ID': item.entityId || '',
+      'IP Address': item.ipAddress || '',
+      'Created At': item.createdAt.toISOString(),
+    }));
 
-    worksheet.columns = [
-      { header: 'ID', key: 'id', width: 25 },
-      { header: 'Actor ID', key: 'actorId', width: 25 },
-      { header: 'Actor Type', key: 'actorType', width: 15 },
-      { header: 'Action', key: 'action', width: 30 },
-      { header: 'Entity Type', key: 'entityType', width: 20 },
-      { header: 'Entity ID', key: 'entityId', width: 25 },
-      { header: 'IP Address', key: 'ipAddress', width: 15 },
-      { header: 'Created At', key: 'createdAt', width: 25 },
-    ];
-
-    items.forEach((item) => {
-      worksheet.addRow({
-        id: item.id,
-        actorId: item.actorId,
-        actorType: item.actorType,
-        action: item.action,
-        entityType: item.entityType,
-        entityId: item.entityId || '',
-        ipAddress: item.ipAddress || '',
-        createdAt: item.createdAt.toISOString(),
-      });
-    });
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Activity Logs');
 
     // Explicitly trigger a log entry for this export action
     await this.prisma.activityLog.create({
@@ -105,7 +93,7 @@ export class ActivityLogService {
       'attachment; filename=' + `activity-log-export-${new Date().getTime()}.xlsx`,
     );
 
-    await workbook.xlsx.write(res);
-    res.end();
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    res.send(buffer);
   }
 }
