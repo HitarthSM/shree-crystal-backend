@@ -198,6 +198,15 @@ export class MembersService {
       validRowCount: validRows.length,
       invalidRowCount: errorList.length,
       errorList,
+      debug: {
+        rawDataLength: rawData.length,
+        dataStartRow,
+        firstDataRowLength: rawData[dataStartRow] ? rawData[dataStartRow].length : null,
+        firstDataRowCol0: rawData[dataStartRow] ? rawData[dataStartRow][0] : null,
+        firstDataRowFull: rawData[dataStartRow] || null,
+        filename: file.originalname,
+        filesize: file.size,
+      },
     };
   }
 
