@@ -64,17 +64,17 @@ export class StatementsService {
         }
       }
     } else {
-      // Convention based: MemberID_Period.ext
+      // Convention based: Extracts the very first word (before a space or underscore) as MemberID
       for (const file of files) {
-        const parts = file.originalname.split('_');
-        if (parts.length < 2) {
+        const match = file.originalname.match(/^([A-Za-z0-9-]+)[\s_]/);
+        if (!match) {
           unmatchedList.push({
             fileName: file.originalname,
-            reason: 'Filename does not match MemberID_Period convention',
+            reason: 'Filename must start with MemberID followed by a space or underscore',
           });
           continue;
         }
-        const memberIdStr = parts[0];
+        const memberIdStr = match[1];
         const member = await this.prisma.member.findUnique({ where: { memberId: memberIdStr } });
         if (!member) {
           unmatchedList.push({
