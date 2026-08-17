@@ -4,7 +4,7 @@ import { EncryptionService, NotificationService } from '../../common/services/in
 import { CreateMemberDto } from '../dto/create-member.dto.js';
 import { UpdateMemberDto } from '../dto/update-member.dto.js';
 import { Prisma, MemberStatus, ActionType, ImportStatus } from '@prisma/client';
-import * as ExcelJS from 'exceljs';
+import * as XLSX from 'xlsx';
 import { PendingActionService } from '../../pending-action/pending-action.service.js';
 
 @Injectable()
@@ -88,70 +88,94 @@ export class MembersService {
   }
 
   async importExcel(file: Express.Multer.File, adminId: string) {
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(file.buffer as any);
-    const worksheet = workbook.worksheets[0];
+    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+
+    // Parse to JSON array of arrays (header: 1)
+    const rawData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
     const validRows: any[] = [];
     const errorList: any[] = [];
-    const rowNum = 1; // Header is row 1
     let processed = 0;
 
-    // Cache to check duplicates in the DB
     const existingAadhaars = new Set(
-      (await this.prisma.member.findMany({ select: { aadhaarHash: true } })).map(
-        (m) => m.aadhaarHash,
-      ),
+      (await this.prisma.member.findMany({ select: { aadhaarHash: true } }))
+        .filter((m) => m.aadhaarHash)
+        .map((m) => m.aadhaarHash),
     );
     const existingMobiles = new Set(
-      (await this.prisma.member.findMany({ select: { mobile: true } })).map((m) => m.mobile),
+      (await this.prisma.member.findMany({ select: { mobile: true } }))
+        .filter((m) => m.mobile)
+        .map((m) => m.mobile),
     );
 
-    // Cache to check duplicates within the file
     const fileAadhaars = new Set();
     const fileMobiles = new Set();
 
-    worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return; // Skip header
+    // Find the header row by looking for 'MEMBER_NO'
+    let dataStartRow = 0;
+    for (let i = 0; i < rawData.length; i++) {
+      if (rawData[i] && rawData[i].length > 0 && String(rawData[i][0]).trim() === 'MEMBER_NO') {
+        dataStartRow = i + 1; // Data starts below the header
+        break;
+      }
+    }
+
+    if (dataStartRow === 0) {
+      throw new BadRequestException('Could not find header row starting with MEMBER_NO');
+    }
+
+    // Process data rows
+    for (let i = dataStartRow; i < rawData.length; i++) {
+      const row = rawData[i];
+      if (!row || row.length === 0 || !row[0]) continue; // Skip empty rows
+
       processed++;
 
-      const aadhaar = row.getCell(12).value?.toString().trim(); // Assuming column L is Aadhaar
-      const mobile = row.getCell(10).value?.toString().trim(); // Assuming column J is Mobile
+      const memberNo = String(row[0] || '').trim();
+      const fullName = String(row[1] || '').trim();
+      let mobile = String(row[9] || '').trim();
+      let aadhaar = String(row[15] || '').trim();
 
       const rowErrors = [];
 
-      if (!aadhaar || !mobile) {
-        rowErrors.push('Aadhaar and Mobile are required');
-      } else {
-        const aadhaarHash = this.encryption.hash(aadhaar);
+      // Generate dummies if missing to support legacy data
+      if (!mobile) mobile = `00000${memberNo.padStart(5, '0')}`; // Unique dummy mobile
+      if (!aadhaar) aadhaar = `000000${memberNo.padStart(6, '0')}`; // Unique dummy aadhaar
 
-        if (existingAadhaars.has(aadhaarHash)) rowErrors.push('Aadhaar already exists in DB');
-        if (fileAadhaars.has(aadhaar)) rowErrors.push('Duplicate Aadhaar in file');
-        if (existingMobiles.has(mobile)) rowErrors.push('Mobile already exists in DB');
-        if (fileMobiles.has(mobile)) rowErrors.push('Duplicate Mobile in file');
+      const aadhaarHash = this.encryption.hash(aadhaar);
 
-        fileAadhaars.add(aadhaar);
-        fileMobiles.add(mobile);
-      }
+      if (existingAadhaars.has(aadhaarHash)) rowErrors.push('Aadhaar already exists in DB');
+      if (fileAadhaars.has(aadhaar)) rowErrors.push('Duplicate Aadhaar in file');
+      if (existingMobiles.has(mobile)) rowErrors.push('Mobile already exists in DB');
+      if (fileMobiles.has(mobile)) rowErrors.push('Duplicate Mobile in file');
 
-      // Add more validations as needed...
+      fileAadhaars.add(aadhaar);
+      fileMobiles.add(mobile);
 
       if (rowErrors.length > 0) {
-        errorList.push({ row: rowNumber, reasons: rowErrors });
+        errorList.push({ row: i + 1, reasons: rowErrors });
       } else {
+        const address = [row[19], row[20], row[21], row[22]]
+          .filter(Boolean)
+          .map((a) => String(a).trim())
+          .join(', ');
+
         validRows.push({
-          fullName: row.getCell(1).value?.toString(),
-          dob: row.getCell(3).value?.toString(),
-          gender: row.getCell(4).value?.toString()?.toUpperCase(),
-          addressLine1: row.getCell(5).value?.toString(),
-          city: row.getCell(7).value?.toString(),
-          state: row.getCell(8).value?.toString(),
-          pincode: row.getCell(9).value?.toString(),
+          memberNo,
+          fullName,
+          dob: String(row[6] || '').trim(),
+          gender: String(row[8] || '').trim() === 'M' ? 'MALE' : 'FEMALE',
+          addressLine1: address || String(row[2] || '').trim(),
+          city: String(row[24] || '').trim() || 'Unknown',
+          state: String(row[25] || '').trim() || 'Unknown',
+          pincode: '000000', // Excel doesn't have pincode clearly mapped
           mobile,
           aadhaar,
         });
       }
-    });
+    }
 
     const batch = await this.prisma.importBatch.create({
       data: {
@@ -182,18 +206,11 @@ export class MembersService {
 
     const validRows = batch.previewData as any[];
 
-    let nextMemberId = 1;
-    const lastMember = await this.prisma.member.findFirst({
-      where: { memberId: { startsWith: 'SCC-' } },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (lastMember && lastMember.memberId.startsWith('SCC-')) {
-      nextMemberId = parseInt(lastMember.memberId.replace('SCC-', ''), 10) + 1;
-    }
-
     const membersToCreate = validRows.map((row) => {
-      const memberId = `SCC-${nextMemberId.toString().padStart(5, '0')}`;
-      nextMemberId++;
+      // Use the memberNo directly from the Excel file to ensure it matches statements!
+      const memberId = row.memberNo
+        ? String(row.memberNo)
+        : `SCC-${Math.floor(Math.random() * 10000)}`;
 
       return {
         memberId,
