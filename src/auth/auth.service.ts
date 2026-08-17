@@ -119,7 +119,7 @@ export class AuthService {
   async login(
     identifier: string,
     pass: string,
-  ): Promise<{ tempToken: string; isFirstLogin: boolean }> {
+  ): Promise<{ accessToken?: string; tempToken?: string; isFirstLogin: boolean }> {
     const userResult = await this.findUserByIdentifier(identifier);
     if (!userResult) {
       throw new UnauthorizedException('Invalid credentials');
@@ -133,16 +133,20 @@ export class AuthService {
       await this.handleFailedAttempt(user.id, type, user.failedAttempts);
     }
 
-    // Success! Clear attempts, generate OTP
+    // Success! Clear attempts
     await this.clearFailedAttempts(user.id, type);
-    await this.otpService.generateAndSendOtp(identifier, OtpType.LOGIN);
 
-    const tempToken = this.jwtService.sign(
-      { sub: user.id, type: 'OTP_VERIFY', userType: type },
-      { expiresIn: '5m' },
-    );
+    // BYPASS OTP: Generate Access Token directly instead of Temp Token
+    const accessPayload: JwtPayload = {
+      sub: user.id,
+      userType: type,
+      role: user.role,
+      version: user.sessionVersion,
+    };
 
-    return { tempToken, isFirstLogin: user.isFirstLogin };
+    const accessToken = this.jwtService.sign(accessPayload);
+
+    return { accessToken, isFirstLogin: user.isFirstLogin };
   }
 
   async verifyOtp(tempToken: string, otp: string): Promise<{ accessToken: string }> {
