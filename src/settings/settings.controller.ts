@@ -1,4 +1,14 @@
-import { Controller, Get, Put, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Put,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Param,
+  BadRequestException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { SettingsService } from './settings.service.js';
 import { BackupService } from './backup/backup.service.js';
@@ -13,6 +23,7 @@ import { Public } from '../common/decorators/public.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { AdminRole } from '../common/enums/index.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import type { AuthenticatedUser } from '../auth/types/auth.types.js';
 
 @ApiTags('Settings')
 @Controller('settings')
@@ -38,7 +49,7 @@ export class SettingsController {
   @ApiResponse({ status: 200 })
   async updateSocietyDetails(
     @Body() dto: SocietyDetailsDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     await this.settingsService.updateSocietyDetails(dto, user.userId);
   }
@@ -59,7 +70,7 @@ export class SettingsController {
   @ApiResponse({ status: 200 })
   async updateNotificationGateway(
     @Body() dto: NotificationGatewayDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     await this.settingsService.updateNotificationGateway(dto, user.userId);
   }
@@ -81,7 +92,7 @@ export class SettingsController {
   @ApiResponse({ status: 200 })
   async updateSecurityPolicy(
     @Body() dto: SecurityPolicyDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     await this.settingsService.updateSecurityPolicy(dto, user.userId);
   }
@@ -104,5 +115,34 @@ export class SettingsController {
   @ApiResponse({ status: 200, description: 'Backup executed successfully' })
   async runBackup(): Promise<void> {
     await this.backupService.runBackup();
+  }
+
+  @ApiBearerAuth()
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
+  @Get('public-content/:key')
+  @ApiOperation({ summary: 'Get public content setting (Admin)' })
+  @ApiResponse({ status: 200 })
+  async getAdminPublicContent(@Param('key') key: string): Promise<any> {
+    if (!key.startsWith('public.content.')) {
+      throw new BadRequestException('Invalid key namespace');
+    }
+    const content = await this.settingsService.getSetting(key);
+    return content || {};
+  }
+
+  @ApiBearerAuth()
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
+  @Put('public-content/:key')
+  @ApiOperation({ summary: 'Update public content setting (Admin)' })
+  @ApiResponse({ status: 200 })
+  async updateAdminPublicContent(
+    @Param('key') key: string,
+    @Body() dto: any,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<void> {
+    if (!key.startsWith('public.content.')) {
+      throw new BadRequestException('Invalid key namespace');
+    }
+    await this.settingsService.updateSetting(key, dto, user.userId);
   }
 }

@@ -7,6 +7,7 @@ import {
   IsPositive,
   IsDateString,
 } from 'class-validator';
+import { Prisma } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { InterestType, DepositType } from '@prisma/client';
 
@@ -109,7 +110,7 @@ export class CreateDepositSchemeDto {
   interestRate: number;
 
   @IsOptional()
-  tenureOptions?: any; // e.g., JSON array
+  tenureOptions?: Prisma.InputJsonValue; // e.g., JSON array
 
   @IsOptional()
   @IsBoolean()
@@ -132,7 +133,7 @@ export class UpdateDepositSchemeDto {
   interestRate?: number;
 
   @IsOptional()
-  tenureOptions?: any;
+  tenureOptions?: Prisma.InputJsonValue;
 
   @IsOptional()
   @IsBoolean()

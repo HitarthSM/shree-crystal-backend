@@ -1,5 +1,5 @@
-import { Controller, Post, Get, Body, UseGuards, Req } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
+import { AuthService } from './auth.service.js';
 import {
   LoginDto,
   VerifyOtpDto,
@@ -7,9 +7,10 @@ import {
   ResetPasswordDto,
   ChangePasswordDto,
 } from './dto/auth.dto';
-import { Public } from '../common/decorators/public.decorator';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import type { Request } from 'express';
+import { Public } from '../common/decorators/public.decorator.js';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import type { AuthenticatedUser } from './types/auth.types.js';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 
 @Controller('auth')
@@ -50,8 +51,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
-  async changePassword(@Body() changePasswordDto: ChangePasswordDto, @Req() req: Request) {
-    const user = req.user as any;
+  async changePassword(@Body() changePasswordDto: ChangePasswordDto, @CurrentUser() user: AuthenticatedUser) {
     await this.authService.changePassword(
       user.userId,
       user.userType,
@@ -63,9 +63,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  getMe(@Req() req: Request) {
-    // req.user is populated by JwtStrategy with the full user record
-    const user = req.user as any;
+  getMe(@CurrentUser() user: AuthenticatedUser) {
     // Exclude passwordHash for security
     const { passwordHash, ...safeUser } = user;
     return safeUser;
@@ -73,8 +71,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  async logout(@Req() req: Request) {
-    const user = req.user as any;
+  async logout(@CurrentUser() user: AuthenticatedUser) {
     await this.authService.logout(user.userId, user.userType);
     return { message: 'Logged out successfully' };
   }

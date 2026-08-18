@@ -7,6 +7,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { QueriesService } from '../queries.service.js';
 import { AdminReplyDto } from '../dto/admin-reply.dto.js';
 import { QueryFilterDto } from '../dto/query-filter.dto.js';
+import type { AuthenticatedUser } from '../../auth/types/auth.types.js';
 
 @Controller('queries')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -35,7 +36,7 @@ export class AdminQueriesController {
   async replyToQuery(
     @Param('id') id: string,
     @Body() replyDto: AdminReplyDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.queriesService.addAdminReply(user.userId, id, replyDto);
   }

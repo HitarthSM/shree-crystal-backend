@@ -13,6 +13,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AdminRole } from '@prisma/client';
+import type { AuthenticatedUser } from '../auth/types/auth.types.js';
 
 @Controller('loan-config')
 export class LoanConfigController {
@@ -43,7 +44,7 @@ export class LoanConfigController {
   async updateLoanType(
     @Param('id') id: string,
     @Body() dto: UpdateLoanTypeDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.loanConfigService.updateLoanType(id, dto, user.id);
   }
@@ -61,7 +62,7 @@ export class LoanConfigController {
   async updateDepositScheme(
     @Param('id') id: string,
     @Body() dto: UpdateDepositSchemeDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.loanConfigService.updateDepositScheme(id, dto, user.id);
   }

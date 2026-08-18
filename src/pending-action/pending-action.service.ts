@@ -1,8 +1,8 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { ActionType, PendingActionStatus } from '@prisma/client';
+import { Prisma, ActionType, PendingActionStatus } from '@prisma/client';
 
-export type ActionHandler = (payload: any, checkedById?: string) => Promise<void>;
+export type ActionHandler = (payload: Prisma.InputJsonValue, checkedById?: string) => Promise<void>;
 
 @Injectable()
 export class PendingActionService {
@@ -46,7 +46,7 @@ export class PendingActionService {
   /**
    * Propose an action. Creates a PENDING record.
    */
-  async propose(actionType: ActionType, payload: any, madeById: string) {
+  async propose(actionType: ActionType, payload: Prisma.InputJsonValue, madeById: string) {
     return this.prisma.pendingAction.create({
       data: {
         actionType,
@@ -87,7 +87,7 @@ export class PendingActionService {
     // Execute the action in a transaction to ensure atomicity of the update and the action.
     // However, the handler might have its own transaction logic.
     // Usually handlers manage their own DB updates. If the handler fails, we throw and don't mark as approved.
-    await handler(pendingAction.payload, checkedById);
+    await handler(pendingAction.payload as Prisma.InputJsonValue, checkedById);
 
     return this.prisma.pendingAction.update({
       where: { id: pendingActionId },

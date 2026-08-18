@@ -25,6 +25,7 @@ import { AdminRole, MemberStatus } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PendingActionService } from '../../pending-action/pending-action.service.js';
+import type { AuthenticatedUser } from '../../auth/types/auth.types.js';
 
 @Controller('members')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -48,12 +49,11 @@ export class MembersController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
-          // Accept standard excel formats
         ],
       }),
     )
     file: Express.Multer.File,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.membersService.importExcel(file, user.userId);
   }
@@ -93,7 +93,7 @@ export class MembersController {
   update(
     @Param('id') id: string,
     @Body() updateMemberDto: UpdateMemberDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.membersService.update(id, updateMemberDto, user.userId);
   }
@@ -104,7 +104,7 @@ export class MembersController {
     @Param('id') id: string,
     @Body('status') status: MemberStatus,
     @Body('reason') reason: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.membersService.changeStatus(id, status, reason, user.userId);
   }
@@ -115,7 +115,7 @@ export class MembersController {
     @Param('id') id: string,
     @Body('approve') approve: boolean,
     @Body('reason') reason: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     if (approve) {
       return this.pendingActionService.approve(id, user.userId);

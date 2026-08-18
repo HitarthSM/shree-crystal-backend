@@ -6,6 +6,7 @@ import { QueriesService } from '../queries.service.js';
 import { CreateQueryDto } from '../dto/create-query.dto.js';
 import { AddMessageDto } from '../dto/add-message.dto.js';
 import { AdminReplyDto } from '../dto/admin-reply.dto.js';
+import type { AuthenticatedUser } from '../../auth/types/auth.types.js';
 
 @Controller('queries')
 @UseGuards(JwtAuthGuard)
@@ -13,32 +14,32 @@ export class MemberQueriesController {
   constructor(private readonly queriesService: QueriesService) {}
 
   @Post()
-  async createQuery(@CurrentUser() user: any, @Body() dto: CreateQueryDto) {
+  async createQuery(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateQueryDto) {
     return this.queriesService.createMemberQuery(user.userId, dto);
   }
 
   @Get('me')
   @UseGuards(MemberOwnershipGuard)
-  async getMyQueries(@CurrentUser() user: any) {
+  async getMyQueries(@CurrentUser() user: AuthenticatedUser) {
     return this.queriesService.getMemberQueries(user.userId);
   }
 
   @Get('me/:id')
   @UseGuards(MemberOwnershipGuard)
-  async getMyQueryById(@CurrentUser() user: any, @Param('id') id: string) {
+  async getMyQueryById(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.queriesService.getMemberQueryById(user.userId, id);
   }
 
   @Post('me/:id/reopen')
   @UseGuards(MemberOwnershipGuard)
-  async reopenMyQuery(@CurrentUser() user: any, @Param('id') id: string) {
+  async reopenMyQuery(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.queriesService.reopenMemberQuery(user.userId, id);
   }
 
   @Post(':id/messages')
   // This endpoint handles both member and admin replies since the route is the same.
   async addMessage(
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
     @Body() dto: AddMessageDto | AdminReplyDto,
   ) {

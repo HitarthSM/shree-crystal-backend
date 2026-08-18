@@ -1,8 +1,9 @@
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { PrismaService } from '../common/prisma/prisma.service';
+import { PrismaService } from '../common/prisma/prisma.service.js';
 import { ConfigService } from '@nestjs/config';
+import { AuthenticatedUser, JwtUserPayload } from './types/auth.types.js';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -17,9 +18,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: any) {
+  async validate(payload: JwtUserPayload): Promise<AuthenticatedUser> {
     // payload should have { sub, userType, version }
-    const { sub, userType, version } = payload;
+    // Actually the token signs { sub, userType, role, version }
+    // Our new JwtUserPayload has userId. Let's map it. 
+    // Wait, the payload uses 'sub'. Let's stick to reading 'sub' and outputting AuthenticatedUser.
+    const sub = (payload as any).sub;
+    const { userType, version } = payload;
 
     if (!sub || !userType || version === undefined) {
       throw new UnauthorizedException('Invalid token payload');
@@ -43,8 +48,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return {
       userId: user.id,
       userType,
-      role: (user as any).role,
+      role: 'role' in user ? user.role : undefined,
       ...user,
-    };
+    } as AuthenticatedUser;
   }
 }

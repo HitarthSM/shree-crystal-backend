@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { Prisma, LoanType, ActionType, RateEntityType, InterestType } from '@prisma/client';
 import { PendingActionService } from '../pending-action/pending-action.service';
 import {
   CreateLoanTypeDto,
@@ -8,7 +9,6 @@ import {
   UpdateDepositSchemeDto,
   CalculateLoanDto,
 } from './dto';
-import { ActionType, RateEntityType, InterestType } from '@prisma/client';
 
 export type RateChangePayload = {
   schemeId: string;
@@ -47,7 +47,7 @@ export class LoanConfigService {
     return { loanTypes, depositSchemes };
   }
 
-  calculateLoan(dto: CalculateLoanDto, loanType: any) {
+  calculateLoan(dto: CalculateLoanDto, loanType: LoanType) {
     const { amount, tenure } = dto;
     const rate = Number(loanType.interestRate); // Annual rate
 

@@ -13,6 +13,7 @@ export const envValidationSchema = Joi.object({
   // ─── Auth / JWT ───────────────────────────────────────────────────────────
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_EXPIRES_IN: Joi.string().default('7d'),
+  DEFAULT_MEMBER_PASSWORD: Joi.string().required(),
 
   // ─── SMS ──────────────────────────────────────────────────────────────────
   SMS_GATEWAY_KEY: Joi.string().required(),
