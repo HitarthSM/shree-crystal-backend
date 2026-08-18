@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service.js';
 import { EncryptionService, NotificationService } from '../../common/services/index.js';
 import { CreateMemberDto } from '../dto/create-member.dto.js';
@@ -15,6 +16,7 @@ export class MembersService {
     private readonly encryption: EncryptionService,
     private readonly notification: NotificationService,
     private readonly pendingActionService: PendingActionService,
+    private readonly configService: ConfigService,
   ) {}
 
   private async generateMemberId(): Promise<string> {
@@ -53,7 +55,8 @@ export class MembersService {
     const memberId = await this.generateMemberId();
     const aadhaarEncrypted = this.encryption.encrypt(dto.aadhaar);
     const panEncrypted = dto.pan ? this.encryption.encrypt(dto.pan) : null;
-    const defaultPasswordHash = await bcrypt.hash('Shree@123', 10);
+    const defaultPass = this.configService.getOrThrow<string>('DEFAULT_MEMBER_PASSWORD');
+    const defaultPasswordHash = await bcrypt.hash(defaultPass, 10);
 
     const member = await this.prisma.member.create({
       data: {
@@ -91,7 +94,12 @@ export class MembersService {
   }
 
   async importExcel(file: Express.Multer.File, adminId: string) {
-    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    let workbook;
+    try {
+      workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    } catch (e) {
+      throw new BadRequestException('Invalid Excel or CSV file format.');
+    }
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
 
@@ -116,18 +124,31 @@ export class MembersService {
     const fileAadhaars = new Set();
     const fileMobiles = new Set();
 
-    // Find the header row by looking for 'MEMBER_NO'
+    // Find the header row and map columns
     let dataStartRow = 0;
+    let headerMap: Record<string, number> = {};
     for (let i = 0; i < rawData.length; i++) {
-      if (rawData[i] && rawData[i].length > 0 && String(rawData[i][0]).trim() === 'MEMBER_NO') {
-        dataStartRow = i + 1; // Data starts below the header
-        break;
+      if (rawData[i] && rawData[i].length > 0) {
+        const hasMemberNo = rawData[i].some((col: any) => String(col).trim().toUpperCase() === 'MEMBER_NO');
+        if (hasMemberNo) {
+          dataStartRow = i + 1; // Data starts below the header
+          rawData[i].forEach((col: any, index: number) => {
+            if (col) headerMap[String(col).trim().toUpperCase()] = index;
+          });
+          break;
+        }
       }
     }
 
     if (dataStartRow === 0) {
       throw new BadRequestException('Could not find header row starting with MEMBER_NO');
     }
+
+    // Helper to get mapped column or fallback
+    const getCol = (row: any[], header: string, fallbackIdx: number) => {
+      const idx = headerMap[header.toUpperCase()] !== undefined ? headerMap[header.toUpperCase()] : fallbackIdx;
+      return String(row[idx] || '').trim();
+    };
 
     // Process data rows
     for (let i = dataStartRow; i < rawData.length; i++) {
@@ -136,10 +157,10 @@ export class MembersService {
 
       processed++;
 
-      const memberNo = String(row[0] || '').trim();
-      const fullName = String(row[1] || '').trim();
-      let mobile = String(row[9] || '').trim();
-      let aadhaar = String(row[15] || '').trim();
+      const memberNo = getCol(row, 'MEMBER_NO', 0);
+      const fullName = getCol(row, 'MEMBER_NAME', 1);
+      let mobile = getCol(row, 'MOBILE', 9);
+      let aadhaar = getCol(row, 'AADHAR', 15);
 
       const rowErrors = [];
 
@@ -160,19 +181,18 @@ export class MembersService {
       if (rowErrors.length > 0) {
         errorList.push({ row: i + 1, reasons: rowErrors });
       } else {
-        const address = [row[19], row[20], row[21], row[22]]
+        const address = [getCol(row, 'ADD1', 19), getCol(row, 'ADD2', 20), getCol(row, 'ADD3', 21), getCol(row, 'ADD4', 22)]
           .filter(Boolean)
-          .map((a) => String(a).trim())
           .join(', ');
 
         validRows.push({
           memberNo,
           fullName,
-          dob: String(row[6] || '').trim(),
-          gender: String(row[8] || '').trim() === 'M' ? 'MALE' : 'FEMALE',
-          addressLine1: address || String(row[2] || '').trim(),
-          city: String(row[24] || '').trim() || 'Unknown',
-          state: String(row[25] || '').trim() || 'Unknown',
+          dob: getCol(row, 'BIRTH_DATE', 6),
+          gender: getCol(row, 'SEX', 8) === 'M' ? 'MALE' : 'FEMALE',
+          addressLine1: address || getCol(row, 'ADDRESS', 2),
+          city: getCol(row, 'DISTNAME', 24) || 'Unknown',
+          state: 'Unknown',
           pincode: '000000', // Excel doesn't have pincode clearly mapped
           mobile,
           aadhaar,
@@ -209,7 +229,8 @@ export class MembersService {
 
     const validRows = batch.previewData as any[];
 
-    const defaultPasswordHash = await bcrypt.hash('Shree@123', 10);
+    const defaultPass = this.configService.getOrThrow<string>('DEFAULT_MEMBER_PASSWORD');
+    const defaultPasswordHash = await bcrypt.hash(defaultPass, 10);
 
     const membersToCreate = validRows.map((row) => {
       // Use the memberNo directly from the Excel file to ensure it matches statements!

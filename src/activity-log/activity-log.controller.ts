@@ -7,6 +7,7 @@ import { AdminRole } from '../common/enums/index.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { GetActivityLogDto } from './dto/get-activity-log.dto';
 import type { Response } from 'express';
+import type { AuthenticatedUser } from '../auth/types/auth.types.js';
 
 @Controller('activity-log')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -23,7 +24,7 @@ export class ActivityLogController {
   async exportExcel(
     @Query() query: GetActivityLogDto,
     @Res() res: Response,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     await this.activityLogService.exportExcel(query, res, user);
   }

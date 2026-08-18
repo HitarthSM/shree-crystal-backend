@@ -21,6 +21,7 @@ import { BatchUploadStatementsDto } from './dto/batch-upload-statements.dto.js';
 import { ReplaceStatementDto } from './dto/replace-statement.dto.js';
 import { WithdrawStatementDto } from './dto/withdraw-statement.dto.js';
 import { StatementQueryDto } from './dto/statement-query.dto.js';
+import type { AuthenticatedUser } from '../auth/types/auth.types.js';
 
 @Controller('statements')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,7 +32,7 @@ export class AdminStatementsController {
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
   @UseInterceptors(AnyFilesInterceptor())
   async previewBatchUpload(
-    @CurrentUser() admin: any,
+    @CurrentUser() admin: AuthenticatedUser,
     @Body() dto: BatchUploadStatementsDto,
     @UploadedFiles() rawFiles: Array<Express.Multer.File>,
   ) {
@@ -46,7 +47,7 @@ export class AdminStatementsController {
 
   @Post('batch/:batchId/publish')
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
-  async publishBatch(@Param('batchId') batchId: string, @CurrentUser() admin: any) {
+  async publishBatch(@Param('batchId') batchId: string, @CurrentUser() admin: AuthenticatedUser) {
     return this.statementsService.publishBatch(batchId, admin.id);
   }
 
@@ -55,7 +56,7 @@ export class AdminStatementsController {
   async replaceStatement(
     @Param('id') id: string,
     @Body() dto: ReplaceStatementDto,
-    @CurrentUser() admin: any,
+    @CurrentUser() admin: AuthenticatedUser,
   ) {
     return this.statementsService.replaceStatement(id, admin.id, dto);
   }
@@ -65,14 +66,14 @@ export class AdminStatementsController {
   async withdrawStatement(
     @Param('id') id: string,
     @Body() dto: WithdrawStatementDto,
-    @CurrentUser() admin: any,
+    @CurrentUser() admin: AuthenticatedUser,
   ) {
     return this.statementsService.withdrawStatement(id, admin.id, dto);
   }
 
   @Get('batches')
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR, AdminRole.VIEWER)
-  async findBatches(@Query() query: any) {
+  async findBatches(@Query() query: { page?: number; limit?: number; status?: string }) {
     return this.statementsService.findBatches(query);
   }
 

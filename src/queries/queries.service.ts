@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationService } from '../common/services/notification.service.js';
 import { CreateQueryDto } from './dto/create-query.dto.js';

@@ -96,7 +96,8 @@ describe('MembersController (e2e)', () => {
     const worksheet = workbook.addWorksheet('Members');
 
     worksheet.addRow([
-      'fullName',
+      'MEMBER_NO',
+      'MEMBER_NAME',
       'fatherOrHusbandName',
       'dob',
       'gender',
@@ -105,12 +106,13 @@ describe('MembersController (e2e)', () => {
       'city',
       'state',
       'pincode',
-      'mobile',
+      'MOBILE',
       'email',
-      'aadhaar',
+      'AADHAR',
     ]);
     // Valid Row
     worksheet.addRow([
+      'M0001',
       'Valid Member',
       '',
       '1985-05-05',
@@ -126,6 +128,7 @@ describe('MembersController (e2e)', () => {
     ]);
     // Invalid Row (Duplicate Aadhaar from testMember)
     worksheet.addRow([
+      'M0002',
       'Invalid Member',
       '',
       '1995-05-05',
@@ -148,8 +151,13 @@ describe('MembersController (e2e)', () => {
     const importRes = await request(app.getHttpServer())
       .post('/members/import')
       .set('Authorization', `Bearer ${adminToken}`)
-      .attach('file', filePath)
-      .expect(201);
+      .attach('file', filePath, { contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+    if (importRes.status !== 201) {
+      console.error('Import failed:', importRes.body);
+    }
+    
+    expect(importRes.status).toBe(201);
 
     const { batchId, validRowCount, invalidRowCount, errorList } = importRes.body;
 

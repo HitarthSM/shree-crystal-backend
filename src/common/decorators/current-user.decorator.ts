@@ -1,5 +1,6 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { Request } from 'express';
+import { AuthenticatedUser } from '../../auth/types/auth.types.js';
 
 /**
  * Pulls the authenticated user off the Express request.
@@ -8,9 +9,9 @@ import { Request } from 'express';
  *
  * @example
  * @Get('me')
- * getProfile(@CurrentUser() user: JwtPayload) { return user; }
+ * getProfile(@CurrentUser() user: AuthenticatedUser) { return user; }
  */
-export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext) => {
+export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext): AuthenticatedUser => {
   const request = ctx.switchToHttp().getRequest<Request>();
-  return request.user;
+  return request.user as AuthenticatedUser;
 });

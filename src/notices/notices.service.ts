@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationService } from '../common/services/notification.service.js';
-import { DeliveryStatus } from '@prisma/client';
+import { Prisma, DeliveryStatus } from '@prisma/client';
 
 @Injectable()
 export class NoticesService {
@@ -12,7 +12,7 @@ export class NoticesService {
     private readonly gateway: NotificationService,
   ) {}
 
-  async create(dto: any) {
+  async create(dto: Prisma.NoticeCreateInput & { memberIds?: string[]; allMembers?: boolean }) {
     const notice = await this.prisma.notice.create({
       data: {
         title: dto.title,
@@ -52,9 +52,9 @@ export class NoticesService {
 
   async findAll(page = 1, limit = 10, category?: string) {
     const skip = (page - 1) * limit;
-    const where: any = { isActive: true };
+    const where: Prisma.NoticeWhereInput = { isActive: true };
     if (category) {
-      where.category = category;
+      (where as any).category = category;
     }
 
     const [data, total] = await Promise.all([
@@ -91,14 +91,14 @@ export class NoticesService {
     return deliveries;
   }
 
-  async update(id: string, dto: any) {
+  async update(id: string, dto: Prisma.NoticeUpdateInput) {
     return this.prisma.notice.update({
       where: { id },
       data: {
         title: dto.title,
         body: dto.body,
         category: dto.category,
-        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt as string | number) : undefined,
         attachmentUrl: dto.attachmentUrl,
       },
     });

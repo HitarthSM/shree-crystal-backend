@@ -23,6 +23,7 @@ import { Public } from '../common/decorators/public.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { AdminRole } from '../common/enums/index.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import type { AuthenticatedUser } from '../auth/types/auth.types.js';
 
 @ApiTags('Settings')
 @Controller('settings')
@@ -48,7 +49,7 @@ export class SettingsController {
   @ApiResponse({ status: 200 })
   async updateSocietyDetails(
     @Body() dto: SocietyDetailsDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     await this.settingsService.updateSocietyDetails(dto, user.userId);
   }
@@ -69,7 +70,7 @@ export class SettingsController {
   @ApiResponse({ status: 200 })
   async updateNotificationGateway(
     @Body() dto: NotificationGatewayDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     await this.settingsService.updateNotificationGateway(dto, user.userId);
   }
@@ -91,7 +92,7 @@ export class SettingsController {
   @ApiResponse({ status: 200 })
   async updateSecurityPolicy(
     @Body() dto: SecurityPolicyDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     await this.settingsService.updateSecurityPolicy(dto, user.userId);
   }
@@ -137,7 +138,7 @@ export class SettingsController {
   async updateAdminPublicContent(
     @Param('key') key: string,
     @Body() dto: any,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     if (!key.startsWith('public.content.')) {
       throw new BadRequestException('Invalid key namespace');

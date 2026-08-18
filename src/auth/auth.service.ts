@@ -9,8 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { OtpService } from './otp.service';
 import * as bcrypt from 'bcrypt';
 import { OtpType } from '@prisma/client';
-
-export type UserType = 'ADMIN' | 'MEMBER';
+import { UserType, AuthenticatedUser } from './types/auth.types.js';
 
 interface TempTokenPayload {
   sub: string;
@@ -41,16 +40,16 @@ export class AuthService {
    * Admin uses email. Member uses phone or memberNumber.
    * Admin uses email. Member uses mobile or memberNumber.
    */
-  async findUserByIdentifier(identifier: string): Promise<{ user: any; type: UserType } | null> {
+  async findUserByIdentifier(identifier: string): Promise<{ user: AuthenticatedUser; type: UserType } | null> {
     if (identifier.includes('@')) {
       const admin = await this.prisma.adminUser.findUnique({ where: { email: identifier } });
-      if (admin) return { user: admin, type: 'ADMIN' };
+      if (admin) return { user: admin as unknown as AuthenticatedUser, type: 'ADMIN' };
     } else {
       let member = await this.prisma.member.findUnique({ where: { mobile: identifier } });
       if (!member) {
         member = await this.prisma.member.findUnique({ where: { memberId: identifier } });
       }
-      if (member) return { user: member, type: 'MEMBER' };
+      if (member) return { user: member as unknown as AuthenticatedUser, type: 'MEMBER' };
     }
     return null;
   }
@@ -58,7 +57,7 @@ export class AuthService {
   /**
    * Checks if a user is currently locked out.
    */
-  private checkLockStatus(user: any) {
+  private checkLockStatus(user: { lockedUntil?: Date | null }) {
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       throw new UnauthorizedException(
         'Account is temporarily locked due to too many failed attempts.',
@@ -136,17 +135,16 @@ export class AuthService {
     // Success! Clear attempts
     await this.clearFailedAttempts(user.id, type);
 
-    // BYPASS OTP: Generate Access Token directly instead of Temp Token
-    const accessPayload: JwtPayload = {
-      sub: user.id,
-      userType: type,
-      role: user.role,
-      version: user.sessionVersion,
-    };
+    // Send OTP
+    await this.otpService.generateAndSendOtp(identifier, OtpType.LOGIN);
 
-    const accessToken = this.jwtService.sign(accessPayload);
+    // Generate Temp Token for OTP Verification
+    const tempToken = this.jwtService.sign(
+      { sub: user.id, type: 'OTP_VERIFY', userType: type },
+      { expiresIn: '5m' },
+    );
 
-    return { accessToken, isFirstLogin: user.isFirstLogin };
+    return { tempToken, isFirstLogin: user.isFirstLogin };
   }
 
   async verifyOtp(tempToken: string, otp: string): Promise<{ accessToken: string }> {

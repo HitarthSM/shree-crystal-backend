@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationService } from '../common/services/notification.service.js';
 import { BatchUploadStatementsDto } from './dto/batch-upload-statements.dto.js';
