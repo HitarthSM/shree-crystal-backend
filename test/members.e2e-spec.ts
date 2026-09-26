@@ -151,12 +151,14 @@ describe('MembersController (e2e)', () => {
     const importRes = await request(app.getHttpServer())
       .post('/members/import')
       .set('Authorization', `Bearer ${adminToken}`)
-      .attach('file', filePath, { contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      .attach('file', filePath, {
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
 
     if (importRes.status !== 201) {
       console.error('Import failed:', importRes.body);
     }
-    
+
     expect(importRes.status).toBe(201);
 
     const { batchId, validRowCount, invalidRowCount, errorList } = importRes.body;

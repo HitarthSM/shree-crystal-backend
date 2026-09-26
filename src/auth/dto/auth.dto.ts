@@ -58,3 +58,9 @@ export class ChangePasswordDto {
   @Matches(PASSWORD_REGEX, { message: PASSWORD_POLICY_MESSAGE })
   newPassword!: string;
 }
+
+export class RefreshTokenDto {
+  @IsString()
+  @IsNotEmpty()
+  refreshToken!: string;
+}

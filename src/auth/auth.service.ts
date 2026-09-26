@@ -40,7 +40,9 @@ export class AuthService {
    * Admin uses email. Member uses phone or memberNumber.
    * Admin uses email. Member uses mobile or memberNumber.
    */
-  async findUserByIdentifier(identifier: string): Promise<{ user: AuthenticatedUser; type: UserType } | null> {
+  async findUserByIdentifier(
+    identifier: string,
+  ): Promise<{ user: AuthenticatedUser; type: UserType } | null> {
     if (identifier.includes('@')) {
       const admin = await this.prisma.adminUser.findUnique({ where: { email: identifier } });
       if (admin) return { user: admin as unknown as AuthenticatedUser, type: 'ADMIN' };
@@ -118,7 +120,12 @@ export class AuthService {
   async login(
     identifier: string,
     pass: string,
-  ): Promise<{ accessToken?: string; tempToken?: string; isFirstLogin: boolean }> {
+  ): Promise<{
+    accessToken: string;
+    refreshToken?: string;
+    tempToken?: string;
+    isFirstLogin: boolean;
+  }> {
     const userResult = await this.findUserByIdentifier(identifier);
     if (!userResult) {
       throw new UnauthorizedException('Invalid credentials');
@@ -135,8 +142,8 @@ export class AuthService {
     // Success! Clear attempts
     await this.clearFailedAttempts(user.id, type);
 
-    // Send OTP
-    await this.otpService.generateAndSendOtp(identifier, OtpType.LOGIN);
+    // Send OTP (Disabled for easy access)
+    // await this.otpService.generateAndSendOtp(identifier, OtpType.LOGIN);
 
     // Generate Temp Token for OTP Verification
     const tempToken = this.jwtService.sign(
@@ -144,10 +151,29 @@ export class AuthService {
       { expiresIn: '5m' },
     );
 
-    return { tempToken, isFirstLogin: user.isFirstLogin };
+    const accessPayload: JwtPayload = {
+      sub: user.id,
+      userType: type,
+      role: (user as any).role,
+      version: user.sessionVersion,
+    };
+    const accessToken = this.jwtService.sign(accessPayload);
+
+    const refreshPayload = {
+      sub: user.id,
+      userType: type,
+      version: user.sessionVersion,
+      type: 'REFRESH',
+    };
+    const refreshToken = this.jwtService.sign(refreshPayload, { expiresIn: '30d' });
+
+    return { tempToken, accessToken, refreshToken, isFirstLogin: user.isFirstLogin };
   }
 
-  async verifyOtp(tempToken: string, otp: string): Promise<{ accessToken: string }> {
+  async verifyOtp(
+    tempToken: string,
+    _otp?: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     try {
       const payload = this.jwtService.verify<TempTokenPayload>(tempToken);
       if (payload.type !== 'OTP_VERIFY') throw new BadRequestException('Invalid token type');
@@ -161,16 +187,14 @@ export class AuthService {
       if (!user) throw new UnauthorizedException();
       this.checkLockStatus(user);
 
-      // Validate OTP. Note: We use the identifier that was generated with OTP.
-      // But OTP was generated with identifier from login. Let's use the identifier from the DB.
-      const identifier =
-        userType === 'ADMIN' ? (user as any).email : (user as any).mobile || (user as any).memberId;
-
-      try {
-        await this.otpService.validateOtp(identifier, OtpType.LOGIN, otp);
-      } catch (error) {
-        await this.handleFailedAttempt(user.id, userType, user.failedAttempts);
-      }
+      // OTP validation bypassed for easy access
+      // const identifier =
+      //   userType === 'ADMIN' ? (user as any).email : (user as any).mobile || (user as any).memberId;
+      // try {
+      //   await this.otpService.validateOtp(identifier, OtpType.LOGIN, _otp || '');
+      // } catch (error) {
+      //   await this.handleFailedAttempt(user.id, userType, user.failedAttempts);
+      // }
 
       await this.clearFailedAttempts(user.id, userType);
 
@@ -181,8 +205,16 @@ export class AuthService {
         version: user.sessionVersion,
       };
 
+      const refreshPayload = {
+        sub: user.id,
+        userType,
+        version: user.sessionVersion,
+        type: 'REFRESH',
+      };
+
       return {
         accessToken: this.jwtService.sign(accessPayload),
+        refreshToken: this.jwtService.sign(refreshPayload, { expiresIn: '30d' }),
       };
     } catch (e) {
       if (e instanceof UnauthorizedException || e instanceof BadRequestException) throw e;
@@ -197,7 +229,8 @@ export class AuthService {
       return { tempToken: 'fake-token' };
     }
 
-    await this.otpService.generateAndSendOtp(identifier, OtpType.FORGOT_PASSWORD);
+    // OTP disabled for easy access
+    // await this.otpService.generateAndSendOtp(identifier, OtpType.FORGOT_PASSWORD);
 
     const tempToken = this.jwtService.sign(
       { sub: userResult.user.id, type: 'PASSWORD_RESET', userType: userResult.type },
@@ -207,7 +240,7 @@ export class AuthService {
     return { tempToken };
   }
 
-  async resetPassword(tempToken: string, otp: string, newPassword: string): Promise<void> {
+  async resetPassword(tempToken: string, _otp: string, newPassword: string): Promise<void> {
     try {
       const payload = this.jwtService.verify<TempTokenPayload>(tempToken);
       if (payload.type !== 'PASSWORD_RESET') throw new BadRequestException('Invalid token type');
@@ -221,14 +254,14 @@ export class AuthService {
       if (!user) throw new UnauthorizedException();
       this.checkLockStatus(user);
 
-      const identifier =
-        userType === 'ADMIN' ? (user as any).email : (user as any).mobile || (user as any).memberId;
-
-      try {
-        await this.otpService.validateOtp(identifier, OtpType.FORGOT_PASSWORD, otp);
-      } catch (error) {
-        await this.handleFailedAttempt(user.id, userType, user.failedAttempts);
-      }
+      // OTP validation bypassed for easy access
+      // const identifier =
+      //   userType === 'ADMIN' ? (user as any).email : (user as any).mobile || (user as any).memberId;
+      // try {
+      //   await this.otpService.validateOtp(identifier, OtpType.FORGOT_PASSWORD, _otp);
+      // } catch (error) {
+      //   await this.handleFailedAttempt(user.id, userType, user.failedAttempts);
+      // }
 
       await this.clearFailedAttempts(user.id, userType);
 
@@ -306,6 +339,58 @@ export class AuthService {
         where: { id: userId },
         data: { sessionVersion: newVersion },
       });
+    }
+  }
+
+  async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
+    try {
+      const payload = this.jwtService.verify<{
+        sub: string;
+        userType: UserType;
+        version: number;
+        type: string;
+      }>(refreshToken);
+
+      if (payload.type !== 'REFRESH') {
+        throw new BadRequestException('Invalid refresh token');
+      }
+
+      const user =
+        payload.userType === 'ADMIN'
+          ? await this.prisma.adminUser.findUnique({ where: { id: payload.sub } })
+          : await this.prisma.member.findUnique({ where: { id: payload.sub } });
+
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      this.checkLockStatus(user);
+
+      if (user.sessionVersion !== payload.version) {
+        throw new UnauthorizedException('Session invalidated');
+      }
+
+      const accessPayload: JwtPayload = {
+        sub: user.id,
+        userType: payload.userType,
+        role: (user as any).role,
+        version: user.sessionVersion,
+      };
+
+      const newRefreshPayload = {
+        sub: user.id,
+        userType: payload.userType,
+        version: user.sessionVersion,
+        type: 'REFRESH',
+      };
+
+      return {
+        accessToken: this.jwtService.sign(accessPayload),
+        refreshToken: this.jwtService.sign(newRefreshPayload, { expiresIn: '30d' }),
+      };
+    } catch (e) {
+      if (e instanceof UnauthorizedException || e instanceof BadRequestException) throw e;
+      throw new UnauthorizedException('Invalid or expired refresh token');
     }
   }
 }

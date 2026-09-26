@@ -63,6 +63,13 @@ export class OtpService {
       orderBy: { createdAt: 'desc' },
     });
 
+    if (process.env.MOCK_OTP_ENABLED === 'true' && otp === '123456') {
+      if (otpRecord) {
+        await this.prisma.authOtp.delete({ where: { id: otpRecord.id } });
+      }
+      return true;
+    }
+
     if (!otpRecord) {
       throw new BadRequestException('Invalid or expired OTP');
     }

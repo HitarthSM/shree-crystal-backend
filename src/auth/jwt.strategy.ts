@@ -21,7 +21,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtUserPayload): Promise<AuthenticatedUser> {
     // payload should have { sub, userType, version }
     // Actually the token signs { sub, userType, role, version }
-    // Our new JwtUserPayload has userId. Let's map it. 
+    // Our new JwtUserPayload has userId. Let's map it.
     // Wait, the payload uses 'sub'. Let's stick to reading 'sub' and outputting AuthenticatedUser.
     const sub = (payload as any).sub;
     const { userType, version } = payload;

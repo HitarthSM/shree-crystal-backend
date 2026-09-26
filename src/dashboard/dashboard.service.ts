@@ -28,16 +28,38 @@ export class DashboardService {
       take: 5,
     });
 
-    // 4. Mock Financials (per the implementation plan)
-    const mockLoans = 42500000;
-    const mockDeposits = 85000000;
+    // 4. Real loan financials — aggregate disbursed loans only
+    // (PENDING_APPROVAL/REJECTED loans never had money move).
+    const disbursedLoanStatuses = ['ACTIVE', 'CLOSED', 'DEFAULTED'] as const;
+    const loanAgg = await this.prisma.memberLoan.aggregate({
+      where: { status: { in: [...disbursedLoanStatuses] } },
+      _sum: { principalAmount: true, outstandingAmount: true },
+    });
+    const totalLoanDisbursed = Number(loanAgg._sum.principalAmount || 0);
+    const totalOutstanding = Number(loanAgg._sum.outstandingAmount || 0);
+    const recoveryRate =
+      totalLoanDisbursed > 0
+        ? ((totalLoanDisbursed - totalOutstanding) / totalLoanDisbursed) * 100
+        : 0;
+
+    // There is no dedicated member-deposit ledger in the schema yet, so
+    // there is no real figure for pigmy/RD/FD deposits. shareCapital is the
+    // only real per-member currency balance the society tracks today —
+    // surfaced honestly as "Total Share Capital" rather than fabricating a
+    // "deposits" number.
+    const shareCapitalAgg = await this.prisma.member.aggregate({
+      where: { status: 'ACTIVE' },
+      _sum: { shareCapital: true },
+    });
+    const totalShareCapital = Number(shareCapitalAgg._sum.shareCapital || 0);
 
     return {
       stats: {
         totalActiveMembers,
         pendingApprovalsCount: pendingCount,
-        totalLoanDisbursed: mockLoans,
-        activeDeposits: mockDeposits,
+        totalLoanDisbursed,
+        totalShareCapital,
+        recoveryRate: Math.round(recoveryRate * 10) / 10,
       },
       pendingApprovals,
       recentActivity,

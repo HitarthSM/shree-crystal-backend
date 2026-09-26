@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Query,
   BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
@@ -32,6 +33,22 @@ export class SettingsController {
     private readonly settingsService: SettingsService,
     private readonly backupService: BackupService,
   ) {}
+
+  @Public()
+  @Get('app-version')
+  @ApiOperation({ summary: 'Get mobile application version and update info (Public)' })
+  @ApiResponse({ status: 200 })
+  getAppVersion(@Query('platform') platform?: string) {
+    return {
+      platform: platform || 'android',
+      latestVersion: '1.0.0',
+      minSupportedVersion: '1.0.0',
+      downloadUrl: '/apk/shree-crystal-latest.apk',
+      releaseNotes:
+        'Official Shree Crystal Credit Society mobile app for members, agents, and administrators.',
+      forceUpdate: false,
+    };
+  }
 
   @Public()
   @Get('society')

@@ -6,6 +6,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   ChangePasswordDto,
+  RefreshTokenDto,
 } from './dto/auth.dto';
 import { Public } from '../common/decorators/public.decorator.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
@@ -32,6 +33,13 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('refresh')
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refresh(refreshTokenDto.refreshToken);
+  }
+
+  @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('forgot-password')
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
@@ -51,7 +59,10 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
-  async changePassword(@Body() changePasswordDto: ChangePasswordDto, @CurrentUser() user: AuthenticatedUser) {
+  async changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     await this.authService.changePassword(
       user.userId,
       user.userType,
@@ -66,7 +77,10 @@ export class AuthController {
   getMe(@CurrentUser() user: AuthenticatedUser) {
     // Exclude passwordHash for security
     const { passwordHash, ...safeUser } = user;
-    return safeUser;
+    // Members are stored with `fullName`, not `name` — normalize so every
+    // client-facing user object exposes a consistent `name` field.
+    const name = 'fullName' in safeUser ? safeUser.fullName : safeUser.name;
+    return { ...safeUser, name };
   }
 
   @UseGuards(JwtAuthGuard)

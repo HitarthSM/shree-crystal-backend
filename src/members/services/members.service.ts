@@ -126,10 +126,12 @@ export class MembersService {
 
     // Find the header row and map columns
     let dataStartRow = 0;
-    let headerMap: Record<string, number> = {};
+    const headerMap: Record<string, number> = {};
     for (let i = 0; i < rawData.length; i++) {
       if (rawData[i] && rawData[i].length > 0) {
-        const hasMemberNo = rawData[i].some((col: any) => String(col).trim().toUpperCase() === 'MEMBER_NO');
+        const hasMemberNo = rawData[i].some(
+          (col: any) => String(col).trim().toUpperCase() === 'MEMBER_NO',
+        );
         if (hasMemberNo) {
           dataStartRow = i + 1; // Data starts below the header
           rawData[i].forEach((col: any, index: number) => {
@@ -146,7 +148,10 @@ export class MembersService {
 
     // Helper to get mapped column or fallback
     const getCol = (row: any[], header: string, fallbackIdx: number) => {
-      const idx = headerMap[header.toUpperCase()] !== undefined ? headerMap[header.toUpperCase()] : fallbackIdx;
+      const idx =
+        headerMap[header.toUpperCase()] !== undefined
+          ? headerMap[header.toUpperCase()]
+          : fallbackIdx;
       return String(row[idx] || '').trim();
     };
 
@@ -181,7 +186,12 @@ export class MembersService {
       if (rowErrors.length > 0) {
         errorList.push({ row: i + 1, reasons: rowErrors });
       } else {
-        const address = [getCol(row, 'ADD1', 19), getCol(row, 'ADD2', 20), getCol(row, 'ADD3', 21), getCol(row, 'ADD4', 22)]
+        const address = [
+          getCol(row, 'ADD1', 19),
+          getCol(row, 'ADD2', 20),
+          getCol(row, 'ADD3', 21),
+          getCol(row, 'ADD4', 22),
+        ]
           .filter(Boolean)
           .join(', ');
 
@@ -303,7 +313,10 @@ export class MembersService {
   }
 
   async findOne(id: string) {
-    const member = await this.prisma.member.findUnique({ where: { id } });
+    const member = await this.prisma.member.findUnique({
+      where: { id },
+      include: { loans: { include: { loanType: true } } },
+    });
     if (!member) throw new NotFoundException('Member not found');
 
     // Mask by default

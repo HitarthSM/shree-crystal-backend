@@ -22,7 +22,11 @@ export class PendingActionController {
   }
 
   @Post(':id/reject')
-  async reject(@Param('id') id: string, @Body() body: RejectActionDto, @CurrentUser() user: AuthenticatedUser) {
+  async reject(
+    @Param('id') id: string,
+    @Body() body: RejectActionDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.pendingActionService.reject(id, user.userId, body.reason);
   }
 }

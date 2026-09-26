@@ -12,6 +12,6 @@ export class MemberNoticesController {
 
   @Get()
   async getMemberNotices(@CurrentUser() user: AuthenticatedUser) {
-    return this.noticesService.getMemberNotices((user as any).memberId);
+    return this.noticesService.getMemberNotices(user.userId);
   }
 }
