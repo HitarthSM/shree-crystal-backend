@@ -76,12 +76,8 @@ describe('AuthController (e2e)', () => {
     });
 
     it('should lock account after 5 failed password attempts', async () => {
-      for (let i = 0; i < 4; i++) {
-        await request(app.getHttpServer())
-          .post('/auth/login')
-          .send({ identifier: testMember.mobile, password: 'WrongPass1' })
-          .expect(401);
-      }
+      // Seeded at 4 so the 5th failure locks it without exceeding the 5/min login throttle.
+      await prisma.member.update({ where: { id: testMember.id }, data: { failedAttempts: 4 } });
 
       const res = await request(app.getHttpServer())
         .post('/auth/login')

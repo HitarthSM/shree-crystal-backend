@@ -40,6 +40,7 @@ describe('MembersController (e2e)', () => {
         email: `admin-${Date.now()}@test.com`,
         name: 'Test Super Admin',
         passwordHash,
+        isFirstLogin: false,
         role: AdminRole.SUPER_ADMIN,
       },
     });

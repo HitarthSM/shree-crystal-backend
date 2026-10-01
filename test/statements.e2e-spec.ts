@@ -65,6 +65,7 @@ describe('MemberStatementsController (e2e)', () => {
             mobile,
             aadhaarHash: 'hash_' + mid,
             aadhaarEncrypted: 'enc_' + mid,
+            isFirstLogin: false,
             shareCapital: 100,
             status: 'ACTIVE',
           },
@@ -79,6 +80,7 @@ describe('MemberStatementsController (e2e)', () => {
             email: 'test_admin_e2e@example.com',
             name: 'Test Admin',
             passwordHash: 'hash',
+            isFirstLogin: false,
             role: 'SUPER_ADMIN',
           },
         }));

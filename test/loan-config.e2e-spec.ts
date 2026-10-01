@@ -41,6 +41,7 @@ describe('LoanConfigController (e2e)', () => {
         email: 'maker@example.com',
         name: 'Maker',
         passwordHash: pwd,
+        isFirstLogin: false,
         role: AdminRole.SUPER_ADMIN,
       },
     });
@@ -49,6 +50,7 @@ describe('LoanConfigController (e2e)', () => {
         email: 'checker@example.com',
         name: 'Checker',
         passwordHash: pwd,
+        isFirstLogin: false,
         role: AdminRole.SUPER_ADMIN,
       },
     });
@@ -130,6 +132,7 @@ describe('LoanConfigController (e2e)', () => {
         mobile: `${Date.now()}`.substring(0, 10),
         aadhaarHash: `hash-${Date.now()}`,
         aadhaarEncrypted: 'enc',
+        isFirstLogin: false,
         shareCapital: 100,
       },
     });
