@@ -1,32 +1,9 @@
 import axios from 'axios';
-import fs from 'fs';
 
 const API_URL = 'http://localhost:3000/api';
 
 async function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function getLatestOtpFromLog(identifier: string): Promise<string> {
-  await delay(1000); // Give the backend time to flush the log
-  const logContent = fs.readFileSync(
-    '/home/hitarth/.gemini/antigravity-ide/brain/77cd3b4d-b540-4cb0-bc4c-0455a5114118/.system_generated/tasks/task-142.log',
-    'utf-8',
-  );
-
-  // Try exactly identifier first
-  const escapedId = identifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  let regex = new RegExp(`\\[OTP Stub\\] Sending OTP (\\d{6}) to ${escapedId}`, 'g');
-  let matches = [...logContent.matchAll(regex)];
-
-  // If not found, just grab the absolute last OTP generated to be safe
-  if (matches.length === 0) {
-    regex = new RegExp(`\\[OTP Stub\\] Sending OTP (\\d{6}) to `, 'g');
-    matches = [...logContent.matchAll(regex)];
-  }
-
-  if (matches.length === 0) throw new Error(`OTP not found in log for ${identifier}`);
-  return matches[matches.length - 1][1];
 }
 
 async function runComprehensiveTest() {
@@ -52,23 +29,9 @@ async function runComprehensiveTest() {
       { validateStatus: () => true },
     );
 
-    if (adminLogin.status === 201 && adminLogin.data?.data?.tempToken) {
-      const adminOtp = await getLatestOtpFromLog('admin@shreecrystal.local');
-      const adminVerify = await axios.post(
-        `${API_URL}/auth/verify-otp`,
-        {
-          tempToken: adminLogin.data.data.tempToken,
-          otp: adminOtp,
-        },
-        { validateStatus: () => true },
-      );
-
-      if (adminVerify.status === 201 && adminVerify.data?.data?.accessToken) {
-        adminToken = adminVerify.data.data.accessToken;
-        console.log('✅ Admin Auth: SUCCESS');
-      } else {
-        throw new Error(`Admin verify failed: ${adminVerify.status}`);
-      }
+    if (adminLogin.status === 201 && adminLogin.data?.data?.accessToken) {
+      adminToken = adminLogin.data.data.accessToken;
+      console.log('✅ Admin Auth: SUCCESS');
     } else {
       throw new Error(`Admin login failed: ${adminLogin.status}`);
     }
@@ -157,39 +120,6 @@ async function runComprehensiveTest() {
       console.error(`❌ Fetch Member Details: FAILED (${getMemberRes.status})`);
     }
 
-    // Reset Member Password (since they are new and have no password)
-    console.log('✅ Setting member password via Forgot Password flow...');
-    const forgotRes = await axios.post(
-      `${API_URL}/auth/forgot-password`,
-      {
-        identifier: mockMobile,
-      },
-      { validateStatus: () => true },
-    );
-
-    if (forgotRes.status === 201 && forgotRes.data?.data?.tempToken) {
-      const forgotTempToken = forgotRes.data.data.tempToken;
-      const forgotOtp = await getLatestOtpFromLog(mockMobile);
-
-      const resetRes = await axios.post(
-        `${API_URL}/auth/reset-password`,
-        {
-          tempToken: forgotTempToken,
-          otp: forgotOtp,
-          newPassword: 'Password@123',
-        },
-        { validateStatus: () => true },
-      );
-
-      if (resetRes.status === 201) {
-        console.log('✅ Member Password Reset: SUCCESS');
-      } else {
-        console.error(`❌ Member Password Reset: FAILED (${resetRes.status})`);
-      }
-    } else {
-      console.error(`❌ Member Forgot Password: FAILED (${forgotRes.status})`);
-    }
-
     // ---------------------------------------------------------
     // 4. MEMBER AUTHENTICATION
     // ---------------------------------------------------------
@@ -198,29 +128,14 @@ async function runComprehensiveTest() {
       `${API_URL}/auth/login`,
       {
         identifier: mockMobile,
-        password: 'Password@123',
+        password: process.env.DEFAULT_MEMBER_PASSWORD ?? '',
       },
       { validateStatus: () => true },
     );
 
-    if (memLogin.status === 201 && memLogin.data?.data?.tempToken) {
-      const memOtp = await getLatestOtpFromLog(mockMobile);
-
-      const memVerify = await axios.post(
-        `${API_URL}/auth/verify-otp`,
-        {
-          tempToken: memLogin.data.data.tempToken,
-          otp: memOtp,
-        },
-        { validateStatus: () => true },
-      );
-
-      if (memVerify.status === 201 && memVerify.data?.data?.accessToken) {
-        memberToken = memVerify.data.data.accessToken;
-        console.log('✅ Member Auth: SUCCESS');
-      } else {
-        throw new Error(`Member verify failed: ${memVerify.status}`);
-      }
+    if (memLogin.status === 201 && memLogin.data?.data?.accessToken) {
+      memberToken = memLogin.data.data.accessToken;
+      console.log('✅ Member Auth: SUCCESS');
     } else {
       throw new Error(`Member login failed: ${memLogin.status}`);
     }
