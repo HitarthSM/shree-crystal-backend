@@ -139,11 +139,6 @@ enum SenderType {
   ADMIN
 }
 
-enum OtpType {
-  LOGIN
-  FORGOT_PASSWORD
-}
-
 enum InterestType {
   FLAT
   REDUCING
@@ -648,25 +643,6 @@ model Settings {
   updatedBy AdminUser? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@map("settings")
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// AUTH OTP
-// ═════════════════════════════════════════════════════════════════════════════
-
-/// Temporary OTPs for login and forgot-password flows.
-model AuthOtp {
-  id         String   @id @default(cuid())
-  /// Can be memberNumber, phone, or email
-  identifier String
-  /// Hashed OTP
-  otpHash    String
-  type       OtpType
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-
-  @@index([identifier])
-  @@map("auth_otps")
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

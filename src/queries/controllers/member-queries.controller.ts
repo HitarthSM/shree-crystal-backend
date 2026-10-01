@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, UseGuards, ForbiddenException } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { MemberOwnershipGuard } from '../../common/guards/member-ownership.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
@@ -6,6 +6,7 @@ import { QueriesService } from '../queries.service.js';
 import { CreateQueryDto } from '../dto/create-query.dto.js';
 import { AddMessageDto } from '../dto/add-message.dto.js';
 import { AdminReplyDto } from '../dto/admin-reply.dto.js';
+import { AdminRole } from '@prisma/client';
 import type { AuthenticatedUser } from '../../auth/types/auth.types.js';
 
 @Controller('queries')
@@ -45,6 +46,10 @@ export class MemberQueriesController {
   ) {
     // Admin users have a 'role' property.
     if (user.role) {
+      // Same rule as POST /queries/:id/reply on the admin controller: read-only roles can't reply.
+      if (user.role === AdminRole.VIEWER) {
+        throw new ForbiddenException('You do not have permission to access this resource.');
+      }
       return this.queriesService.addAdminReply(user.id, id, dto);
     }
 

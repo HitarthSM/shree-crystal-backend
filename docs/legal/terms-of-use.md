@@ -10,7 +10,7 @@ By logging into this website or member portal, you agree to these Terms of Use. 
 Access to the member portal is restricted to registered members of Shree Crystal Co-op Credit and Consumers Society Limited in good standing. Admin access is restricted to authorized staff of the society.
 
 ## 3. Your account
-- You are responsible for keeping your login credentials and OTP confidential.
+- You are responsible for keeping your login credentials confidential.
 - Notify us immediately at [TODO: Insert Contact Email/Phone] if you suspect unauthorized access to your account.
 - The society is not responsible for losses resulting from your failure to keep your credentials secure.
 

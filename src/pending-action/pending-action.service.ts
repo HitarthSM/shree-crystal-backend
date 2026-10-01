@@ -84,19 +84,32 @@ export class PendingActionService {
       );
     }
 
-    // Execute the action in a transaction to ensure atomicity of the update and the action.
-    // However, the handler might have its own transaction logic.
-    // Usually handlers manage their own DB updates. If the handler fails, we throw and don't mark as approved.
-    await handler(pendingAction.payload as Prisma.InputJsonValue, checkedById);
-
-    return this.prisma.pendingAction.update({
-      where: { id: pendingActionId },
+    // Claim the action atomically (PENDING -> APPROVED) *before* running the handler, so two
+    // concurrent approvals cannot both execute it. The loser sees count 0.
+    const claimed = await this.prisma.pendingAction.updateMany({
+      where: { id: pendingActionId, status: PendingActionStatus.PENDING },
       data: {
         status: PendingActionStatus.APPROVED,
         checkedById,
         resolvedAt: new Date(),
       },
     });
+    if (claimed.count === 0) {
+      throw new BadRequestException('Action is no longer pending');
+    }
+
+    try {
+      await handler(pendingAction.payload as Prisma.InputJsonValue, checkedById);
+    } catch (error) {
+      // Handler failed: release the claim so the action can be retried.
+      await this.prisma.pendingAction.updateMany({
+        where: { id: pendingActionId, status: PendingActionStatus.APPROVED },
+        data: { status: PendingActionStatus.PENDING, checkedById: null, resolvedAt: null },
+      });
+      throw error;
+    }
+
+    return this.prisma.pendingAction.findUniqueOrThrow({ where: { id: pendingActionId } });
   }
 
   /**
@@ -119,8 +132,8 @@ export class PendingActionService {
       throw new BadRequestException('Maker cannot reject their own submission');
     }
 
-    return this.prisma.pendingAction.update({
-      where: { id: pendingActionId },
+    const claimed = await this.prisma.pendingAction.updateMany({
+      where: { id: pendingActionId, status: PendingActionStatus.PENDING },
       data: {
         status: PendingActionStatus.REJECTED,
         checkedById,
@@ -128,6 +141,11 @@ export class PendingActionService {
         checkerNote: reason,
       },
     });
+    if (claimed.count === 0) {
+      throw new BadRequestException('Action is no longer pending');
+    }
+
+    return this.prisma.pendingAction.findUniqueOrThrow({ where: { id: pendingActionId } });
   }
 
   /**

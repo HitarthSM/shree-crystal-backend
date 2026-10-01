@@ -4,7 +4,6 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
-import { OtpType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 describe('AuthController (e2e)', () => {
@@ -32,7 +31,6 @@ describe('AuthController (e2e)', () => {
 
   describe('Login Flow & Account Locking', () => {
     let testMember: any;
-    let tempToken: string;
 
     beforeAll(async () => {
       // Create a test member
@@ -62,7 +60,7 @@ describe('AuthController (e2e)', () => {
       await prisma.member.delete({ where: { id: testMember.id } });
     });
 
-    it('should successfully login and return a temp token', async () => {
+    it('should successfully login and return tokens', async () => {
       const res = await request(app.getHttpServer())
         .post('/auth/login')
         .send({
@@ -71,43 +69,23 @@ describe('AuthController (e2e)', () => {
         })
         .expect(201);
 
-      expect(res.body).toHaveProperty('tempToken');
+      expect(res.body).toHaveProperty('accessToken');
+      expect(res.body).toHaveProperty('refreshToken');
+      expect(res.body).not.toHaveProperty('tempToken');
       expect(res.body.isFirstLogin).toBe(true);
-      tempToken = res.body.tempToken;
-
-      // Ensure OTP was generated in DB
-      const otp = await prisma.authOtp.findFirst({
-        where: { identifier: testMember.mobile, type: OtpType.LOGIN },
-      });
-      expect(otp).toBeDefined();
     });
 
-    it('should reject wrong OTP and increment failed attempts', async () => {
-      await request(app.getHttpServer())
-        .post('/auth/verify-otp')
-        .send({
-          tempToken,
-          otp: '000000', // Invalid OTP
-        })
-        .expect(401);
-
-      const member = await prisma.member.findUnique({ where: { id: testMember.id } });
-      expect(member?.failedAttempts).toBe(1);
-    });
-
-    it('should lock account after 5 failed OTP attempts', async () => {
-      // We already failed 1 time. Let's fail 3 more times (total 4).
-      for (let i = 0; i < 3; i++) {
+    it('should lock account after 5 failed password attempts', async () => {
+      for (let i = 0; i < 4; i++) {
         await request(app.getHttpServer())
-          .post('/auth/verify-otp')
-          .send({ tempToken, otp: '111111' })
+          .post('/auth/login')
+          .send({ identifier: testMember.mobile, password: 'WrongPass1' })
           .expect(401);
       }
 
-      // 5th attempt should return 401 and lock the account
       const res = await request(app.getHttpServer())
-        .post('/auth/verify-otp')
-        .send({ tempToken, otp: '111111' })
+        .post('/auth/login')
+        .send({ identifier: testMember.mobile, password: 'WrongPass1' })
         .expect(401);
 
       const member = await prisma.member.findUnique({ where: { id: testMember.id } });

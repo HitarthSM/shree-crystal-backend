@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Request } from 'express';
 import { AdminRole } from '../enums/index.js';
+import type { AuthenticatedUser } from '../../auth/types/auth.types.js';
 
 /**
  * Member ownership guard — enforces the invariant that a member can NEVER
@@ -25,7 +26,7 @@ import { AdminRole } from '../enums/index.js';
 export class MemberOwnershipGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    const user = request.user as any;
+    const user = request.user as AuthenticatedUser | undefined;
 
     if (!user) {
       throw new ForbiddenException('Authentication required.');
@@ -41,14 +42,9 @@ export class MemberOwnershipGuard implements CanActivate {
     const paramMemberId = request.params['memberId'];
 
     if (!paramMemberId) {
-      // If the route explicitly uses /me, it is self-scoped and safe.
-      console.log(
-        'MemberOwnershipGuard debug: request.path =',
-        request.path,
-        'request.url =',
-        request.url,
-      );
-      if (request.path && request.path.includes('/me')) {
+      // A route is self-scoped only if it has a whole `/me` path segment. A bare
+      // substring test would also match `/members`, `/messages`, …
+      if (/\/me(\/|$)/.test(request.path)) {
         return true;
       }
 
@@ -58,7 +54,8 @@ export class MemberOwnershipGuard implements CanActivate {
       );
     }
 
-    if (user.memberId !== paramMemberId) {
+    const ownMemberId = 'memberId' in user ? user.memberId : undefined;
+    if (ownMemberId !== paramMemberId) {
       throw new ForbiddenException('You do not have permission to access this resource.');
     }
 

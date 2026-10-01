@@ -24,7 +24,7 @@ We collect this information to:
 ## 4. How we use and share your information
 We do not sell or rent your personal information. We share it only:
 - With our statutory auditor and the Registrar of Cooperative Societies, when legally required
-- With our SMS/email service provider, solely to deliver OTPs and notices to you, under a confidentiality obligation
+- With our SMS/email service provider, solely to deliver notices to you, under a confidentiality obligation
 - When required by law, court order, or a competent government authority
 
 ## 5. How we protect your information

@@ -19,6 +19,8 @@ describe('PendingActionService', () => {
               create: jest.fn(),
               findUnique: jest.fn(),
               update: jest.fn(),
+              updateMany: jest.fn(),
+              findUniqueOrThrow: jest.fn(),
               findMany: jest.fn(),
             },
             settings: {
@@ -79,7 +81,8 @@ describe('PendingActionService', () => {
         payload: { status: 'ACTIVE' },
       });
 
-      (prismaService.pendingAction.update as jest.Mock).mockResolvedValue({
+      (prismaService.pendingAction.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      (prismaService.pendingAction.findUniqueOrThrow as jest.Mock).mockResolvedValue({
         id: pendingActionId,
         status: PendingActionStatus.APPROVED,
       });
@@ -87,13 +90,49 @@ describe('PendingActionService', () => {
       await service.approve(pendingActionId, checkerId);
 
       expect(mockHandler).toHaveBeenCalledWith({ status: 'ACTIVE' }, checkerId);
-      expect(prismaService.pendingAction.update).toHaveBeenCalledWith(
+      expect(prismaService.pendingAction.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: pendingActionId },
+          where: { id: pendingActionId, status: PendingActionStatus.PENDING },
           data: expect.objectContaining({
             status: PendingActionStatus.APPROVED,
             checkedById: checkerId,
           }),
+        }),
+      );
+    });
+
+    it('does not run the handler when another checker already claimed the action', async () => {
+      const mockHandler = jest.fn();
+      service.registerHandler(ActionType.LOAN_APPROVAL, mockHandler);
+      (prismaService.pendingAction.findUnique as jest.Mock).mockResolvedValue({
+        id: 'a1',
+        actionType: ActionType.LOAN_APPROVAL,
+        status: PendingActionStatus.PENDING,
+        madeById: 'maker',
+        payload: {},
+      });
+      (prismaService.pendingAction.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+
+      await expect(service.approve('a1', 'checker')).rejects.toThrow('no longer pending');
+      expect(mockHandler).not.toHaveBeenCalled();
+    });
+
+    it('releases the claim when the handler throws', async () => {
+      const mockHandler = jest.fn().mockRejectedValue(new Error('boom'));
+      service.registerHandler(ActionType.RATE_CHANGE, mockHandler);
+      (prismaService.pendingAction.findUnique as jest.Mock).mockResolvedValue({
+        id: 'a2',
+        actionType: ActionType.RATE_CHANGE,
+        status: PendingActionStatus.PENDING,
+        madeById: 'maker',
+        payload: {},
+      });
+      (prismaService.pendingAction.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+      await expect(service.approve('a2', 'checker')).rejects.toThrow('boom');
+      expect(prismaService.pendingAction.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: PendingActionStatus.PENDING }),
         }),
       );
     });

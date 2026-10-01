@@ -1,18 +1,12 @@
 import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
-import {
-  LoginDto,
-  VerifyOtpDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
-  ChangePasswordDto,
-  RefreshTokenDto,
-} from './dto/auth.dto';
+import { LoginDto, ChangePasswordDto, RefreshTokenDto } from './dto/auth.dto';
 import { Public } from '../common/decorators/public.decorator.js';
+import { AllowFirstLogin } from '../common/decorators/allow-first-login.decorator.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from './types/auth.types.js';
-import { Throttle, SkipThrottle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
@@ -26,64 +20,57 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
-  @Post('verify-otp')
-  async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
-    return this.authService.verifyOtp(verifyOtpDto.tempToken, verifyOtpDto.otp);
-  }
-
-  @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('refresh')
   async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refresh(refreshTokenDto.refreshToken);
   }
 
-  @Public()
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
-  @Post('forgot-password')
-  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(forgotPasswordDto.identifier);
-  }
-
-  @Public()
-  @Post('reset-password')
-  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
-    await this.authService.resetPassword(
-      resetPasswordDto.tempToken,
-      resetPasswordDto.otp,
-      resetPasswordDto.newPassword,
-    );
-    return { message: 'Password reset successfully' };
-  }
-
   @UseGuards(JwtAuthGuard)
+  @AllowFirstLogin()
   @Post('change-password')
   async changePassword(
     @Body() changePasswordDto: ChangePasswordDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    await this.authService.changePassword(
+    // Changing the password invalidates all sessions; the caller gets a fresh token pair.
+    const tokens = await this.authService.changePassword(
       user.userId,
       user.userType,
       changePasswordDto.currentPassword,
       changePasswordDto.newPassword,
     );
-    return { message: 'Password changed successfully' };
+    return { message: 'Password changed successfully', ...tokens };
   }
 
   @UseGuards(JwtAuthGuard)
+  @AllowFirstLogin()
   @Get('me')
   getMe(@CurrentUser() user: AuthenticatedUser) {
-    // Exclude passwordHash for security
-    const { passwordHash, ...safeUser } = user;
-    // Members are stored with `fullName`, not `name` — normalize so every
-    // client-facing user object exposes a consistent `name` field.
-    const name = 'fullName' in safeUser ? safeUser.fullName : safeUser.name;
-    return { ...safeUser, name };
+    // Explicit allow-list: the loaded record also holds password hash, encrypted
+    // Aadhaar/PAN and other fields that must never reach a client (or its device storage).
+    // Members are stored with `fullName`, not `name` — normalise to a single `name`.
+    const base = {
+      id: user.id,
+      userId: user.userId,
+      userType: user.userType,
+      isFirstLogin: user.isFirstLogin,
+    };
+    if ('fullName' in user) {
+      return {
+        ...base,
+        name: user.fullName,
+        memberId: user.memberId,
+        mobile: user.mobile,
+        email: user.email,
+        status: user.status,
+      };
+    }
+    return { ...base, name: user.name, email: user.email, role: user.role };
   }
 
   @UseGuards(JwtAuthGuard)
+  @AllowFirstLogin()
   @Post('logout')
   async logout(@CurrentUser() user: AuthenticatedUser) {
     await this.authService.logout(user.userId, user.userType);

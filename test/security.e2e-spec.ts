@@ -5,7 +5,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { OtpType, QueryStatus } from '@prisma/client';
+import { QueryStatus } from '@prisma/client';
 
 describe('Security and Access Control (e2e)', () => {
   let app: INestApplication;
@@ -182,11 +182,9 @@ describe('Security and Access Control (e2e)', () => {
   });
 
   describe('4. Logout and Token Invalidation', () => {
-    let tempToken: string;
     let newAccessToken: string;
 
     it('should perform a full login to get a fresh token', async () => {
-      // Step 1: Login
       const loginRes = await request(app.getHttpServer())
         .post('/auth/login')
         .send({ identifier: memberA.mobile, password: 'Password123' });
@@ -196,26 +194,7 @@ describe('Security and Access Control (e2e)', () => {
       }
       expect(loginRes.status).toBe(201);
 
-      tempToken = loginRes.body.tempToken;
-
-      // Force the OTP to be 123456 for testing
-      const hashedOtp = await bcrypt.hash('123456', 10);
-      await prisma.authOtp.updateMany({
-        where: { identifier: memberA.mobile, type: OtpType.LOGIN },
-        data: { otpHash: hashedOtp },
-      });
-
-      // Step 2: Verify OTP
-      const verifyRes = await request(app.getHttpServer())
-        .post('/auth/verify-otp')
-        .send({ tempToken, otp: '123456' });
-
-      if (verifyRes.status !== 201) {
-        console.error('OTP Verify Failed with 400:', verifyRes.body);
-      }
-      expect(verifyRes.status).toBe(201);
-
-      newAccessToken = verifyRes.body.accessToken;
+      newAccessToken = loginRes.body.accessToken;
       expect(newAccessToken).toBeDefined();
     });
 

@@ -13,6 +13,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
+import { FirstLoginGuard } from './common/guards/first-login.guard.js';
 import { PendingActionModule } from './pending-action/pending-action.module';
 import { AdminUsersModule } from './admin-users/admin-users.module.js';
 import { MembersModule } from './members/members.module.js';
@@ -85,6 +86,11 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    // Must stay after JwtAuthGuard — it reads req.user.
+    {
+      provide: APP_GUARD,
+      useClass: FirstLoginGuard,
     },
   ],
 })
