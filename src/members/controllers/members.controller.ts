@@ -62,6 +62,12 @@ export class MembersController {
     return this.membersService.confirmImport(batchId);
   }
 
+  @Get('import/:batchId')
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
+  getImportBatch(@Param('batchId') batchId: string) {
+    return this.membersService.getImportBatch(batchId);
+  }
+
   @Get()
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
   findAll(

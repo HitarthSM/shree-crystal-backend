@@ -15,13 +15,25 @@ async function bootstrap() {
   app.use(helmet());
 
   // ── CORS ──────────────────────────────────────────────────────────────────
-  let frontendOrigin = configService.getOrThrow<string>('FRONTEND_ORIGIN');
-  // Strip trailing slash if present to avoid browser strict origin mismatch
-  if (frontendOrigin.endsWith('/')) {
-    frontendOrigin = frontendOrigin.slice(0, -1);
-  }
+  const configuredOrigin = configService.getOrThrow<string>('FRONTEND_ORIGIN').replace(/\/$/, '');
+  const allowedOrigins = [
+    configuredOrigin,
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
+  ];
   app.enableCors({
-    origin: frontendOrigin,
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],

@@ -21,6 +21,7 @@ import { BatchUploadStatementsDto } from './dto/batch-upload-statements.dto.js';
 import { ReplaceStatementDto } from './dto/replace-statement.dto.js';
 import { WithdrawStatementDto } from './dto/withdraw-statement.dto.js';
 import { StatementQueryDto } from './dto/statement-query.dto.js';
+import { BatchStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/types/auth.types.js';
 
 @Controller('statements')
@@ -73,7 +74,7 @@ export class AdminStatementsController {
 
   @Get('batches')
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR, AdminRole.VIEWER)
-  async findBatches(@Query() query: { page?: number; limit?: number; status?: string }) {
+  async findBatches(@Query() query: { page?: number; limit?: number; status?: BatchStatus }) {
     return this.statementsService.findBatches(query);
   }
 

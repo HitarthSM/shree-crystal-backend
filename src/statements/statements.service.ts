@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, BatchStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationService } from '../common/services/notification.service.js';
 import { BatchUploadStatementsDto } from './dto/batch-upload-statements.dto.js';
@@ -126,7 +126,8 @@ export class StatementsService {
       throw new BadRequestException('Batch is already published');
     }
 
-    const matchedStatements = batch.matchedStatements as any[];
+    const matchedStatements =
+      (batch.matchedStatements as unknown as Array<{ memberId: string; fileUrl: string }>) || [];
 
     // Create statements in transaction
     await this.prisma.$transaction(async (tx) => {
@@ -165,7 +166,7 @@ export class StatementsService {
     for (const st of matchedStatements) {
       this.notificationService
         .sendStatementPublishedNotification(st.memberId, batch.period)
-        .catch((e) => {
+        .catch((e: Error) => {
           this.logger.error(`Failed to send notification for statement: ${e.message}`);
         });
     }
@@ -243,11 +244,11 @@ export class StatementsService {
     return updated;
   }
 
-  async findBatches(query: any) {
+  async findBatches(query: { page?: number; limit?: number; status?: BatchStatus }) {
     const { page = 1, limit = 10, status } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.StatementBatchWhereInput = {};
     if (status) where.status = status;
 
     const [data, total] = await Promise.all([
@@ -275,7 +276,7 @@ export class StatementsService {
     const { page = 1, limit = 10, memberId, period, category, status } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.StatementWhereInput = {};
     if (memberId) {
       const member = await this.prisma.member.findUnique({ where: { memberId } });
       if (member) {
@@ -311,7 +312,7 @@ export class StatementsService {
       throw new NotFoundException('Member not found');
     }
 
-    const where: any = {
+    const where: Prisma.StatementWhereInput = {
       memberId: member.id,
       status: 'PUBLISHED',
     };

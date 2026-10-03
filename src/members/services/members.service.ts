@@ -35,6 +35,65 @@ export class MembersService {
     return `SCC-${nextNum.toString().padStart(5, '0')}`;
   }
 
+  private parseDob(rawDob: unknown, rawAge?: unknown): Date {
+    const fallback = new Date('1970-01-01T00:00:00.000Z');
+
+    if (rawDob !== undefined && rawDob !== null && rawDob !== '') {
+      if (rawDob instanceof Date && !isNaN(rawDob.getTime())) {
+        return rawDob;
+      }
+
+      const str = String(rawDob).trim();
+      const num = Number(str);
+      // Excel serial date code (e.g. 26663)
+      if (!isNaN(num) && num > 1000 && num < 100000) {
+        const date = new Date(Math.round((num - 25569) * 86400 * 1000));
+        if (
+          !isNaN(date.getTime()) &&
+          date.getFullYear() >= 1900 &&
+          date.getFullYear() <= new Date().getFullYear()
+        ) {
+          return date;
+        }
+      }
+
+      // DD/MM/YYYY or DD-MM-YYYY
+      const dmyMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+      if (dmyMatch) {
+        const d = parseInt(dmyMatch[1], 10);
+        const m = parseInt(dmyMatch[2], 10) - 1;
+        const y = parseInt(dmyMatch[3], 10);
+        const date = new Date(Date.UTC(y, m, d));
+        if (
+          !isNaN(date.getTime()) &&
+          date.getFullYear() >= 1900 &&
+          date.getFullYear() <= new Date().getFullYear()
+        ) {
+          return date;
+        }
+      }
+
+      const parsed = new Date(str);
+      if (
+        !isNaN(parsed.getTime()) &&
+        parsed.getFullYear() >= 1900 &&
+        parsed.getFullYear() <= new Date().getFullYear()
+      ) {
+        return parsed;
+      }
+    }
+
+    if (rawAge !== undefined && rawAge !== null && rawAge !== '') {
+      const ageNum = parseInt(String(rawAge).trim(), 10);
+      if (!isNaN(ageNum) && ageNum > 0 && ageNum < 120) {
+        const currentYear = new Date().getFullYear();
+        return new Date(Date.UTC(currentYear - ageNum, 0, 1));
+      }
+    }
+
+    return fallback;
+  }
+
   async create(dto: CreateMemberDto) {
     const aadhaarHash = this.encryption.hash(dto.aadhaar);
     const existing = await this.prisma.member.findFirst({
@@ -184,7 +243,13 @@ export class MembersService {
       fileMobiles.add(mobile);
 
       if (rowErrors.length > 0) {
-        errorList.push({ row: i + 1, reasons: rowErrors });
+        errorList.push({
+          row: i + 1,
+          memberNo: memberNo || `Row ${i + 1}`,
+          fullName: fullName || '-',
+          mobile: mobile ? `${mobile.slice(0, 3)}****${mobile.slice(-4)}` : '-',
+          reasons: rowErrors,
+        });
       } else {
         const address = [
           getCol(row, 'ADD1', 19),
@@ -195,10 +260,13 @@ export class MembersService {
           .filter(Boolean)
           .join(', ');
 
+        const age = getCol(row, 'AGE', 7);
+        const parsedDob = this.parseDob(getCol(row, 'BIRTH_DATE', 6), age);
         validRows.push({
           memberNo,
           fullName,
-          dob: getCol(row, 'BIRTH_DATE', 6),
+          dob: parsedDob.toISOString(),
+          age,
           gender: getCol(row, 'SEX', 8) === 'M' ? 'MALE' : 'FEMALE',
           addressLine1: address || getCol(row, 'ADDRESS', 2),
           city: getCol(row, 'DISTNAME', 24) || 'Unknown',
@@ -228,6 +296,29 @@ export class MembersService {
       validRowCount: validRows.length,
       invalidRowCount: errorList.length,
       errorList,
+      previewData: validRows.slice(0, 50),
+    };
+  }
+
+  async getImportBatch(batchId: string) {
+    const batch = await this.prisma.importBatch.findUnique({
+      where: { id: batchId },
+    });
+    if (!batch) {
+      throw new NotFoundException('Batch not found');
+    }
+    return {
+      batchId: batch.id,
+      filename: batch.filename,
+      status: batch.status,
+      totalRows: batch.totalRows,
+      validRowCount: batch.validRows,
+      invalidRowCount: batch.invalidRows,
+      errorList: batch.errorList,
+      previewData: Array.isArray(batch.previewData)
+        ? (batch.previewData as any[]).slice(0, 50)
+        : [],
+      createdAt: batch.createdAt,
     };
   }
 
@@ -252,7 +343,7 @@ export class MembersService {
         memberId,
         passwordHash: defaultPasswordHash,
         fullName: row.fullName || 'Unknown',
-        dob: new Date(row.dob || '1970-01-01'),
+        dob: this.parseDob(row.dob, row.age),
         gender: row.gender === 'MALE' || row.gender === 'FEMALE' ? row.gender : 'OTHER',
         addressLine1: row.addressLine1 || 'Unknown',
         city: row.city || 'Unknown',
