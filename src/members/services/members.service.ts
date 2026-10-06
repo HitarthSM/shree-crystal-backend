@@ -392,7 +392,7 @@ export class MembersService {
 
     // Mask sensitive info
     return {
-      items: items.map((i) => ({
+      items: items.map(({ passwordHash: _ph, ...i }) => ({
         ...i,
         aadhaarEncrypted: 'MASKED',
         panEncrypted: i.panEncrypted ? 'MASKED' : null,
@@ -410,13 +410,15 @@ export class MembersService {
     });
     if (!member) throw new NotFoundException('Member not found');
 
-    // Mask by default
-    member.aadhaarEncrypted =
+    // Mask by default and strip sensitive authentication credentials
+    const { passwordHash: _ph, ...safeMember } = member;
+    safeMember.aadhaarEncrypted =
       'XXXX-XXXX-' + this.encryption.decrypt(member.aadhaarEncrypted).slice(-4);
-    if (member.panEncrypted) {
-      member.panEncrypted = 'XXXXXXX' + this.encryption.decrypt(member.panEncrypted).slice(-3);
+    if (safeMember.panEncrypted) {
+      safeMember.panEncrypted =
+        'XXXXXXX' + this.encryption.decrypt(safeMember.panEncrypted).slice(-3);
     }
-    return member;
+    return safeMember;
   }
 
   async update(id: string, dto: UpdateMemberDto, adminId: string) {
