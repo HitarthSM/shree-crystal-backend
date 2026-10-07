@@ -392,7 +392,7 @@ export class MembersService {
 
     // Mask sensitive info
     return {
-      items: items.map((i) => ({
+      items: items.map(({ passwordHash: _ph, ...i }) => ({
         ...i,
         aadhaarEncrypted: 'MASKED',
         panEncrypted: i.panEncrypted ? 'MASKED' : null,
@@ -406,17 +406,29 @@ export class MembersService {
   async findOne(id: string) {
     const member = await this.prisma.member.findUnique({
       where: { id },
-      include: { loans: { include: { loanType: true } } },
+      include: {
+        loans: {
+          include: {
+            loanType: true,
+            repayments: {
+              where: { status: 'COMPLETED' },
+              orderBy: { paidAt: 'desc' },
+            },
+          },
+        },
+      },
     });
     if (!member) throw new NotFoundException('Member not found');
 
-    // Mask by default
-    member.aadhaarEncrypted =
+    // Mask by default and strip sensitive authentication credentials
+    const { passwordHash: _ph, ...safeMember } = member;
+    safeMember.aadhaarEncrypted =
       'XXXX-XXXX-' + this.encryption.decrypt(member.aadhaarEncrypted).slice(-4);
-    if (member.panEncrypted) {
-      member.panEncrypted = 'XXXXXXX' + this.encryption.decrypt(member.panEncrypted).slice(-3);
+    if (safeMember.panEncrypted) {
+      safeMember.panEncrypted =
+        'XXXXXXX' + this.encryption.decrypt(safeMember.panEncrypted).slice(-3);
     }
-    return member;
+    return safeMember;
   }
 
   async update(id: string, dto: UpdateMemberDto, adminId: string) {
@@ -459,6 +471,7 @@ export class MembersService {
       // Latest active loan
       this.prisma.memberLoan.findFirst({
         where: { memberId, status: 'ACTIVE' },
+        include: { loanType: true, rateHistory: true },
         orderBy: { createdAt: 'desc' },
       }),
       // Latest published statement
@@ -483,9 +496,24 @@ export class MembersService {
       throw new NotFoundException('Member not found');
     }
 
+    const rate = latestLoan?.rateHistory?.newRate ?? latestLoan?.loanType?.interestRate;
+    const latestLoanData = latestLoan
+      ? {
+          ...latestLoan,
+          type: latestLoan.loanType?.name || 'Standard Member Loan',
+          emiAmount: rate
+            ? Math.round(
+                (Number(latestLoan.outstandingAmount) * (Number(rate) / 100)) / 12 +
+                  Number(latestLoan.outstandingAmount) / 24,
+              )
+            : null,
+          nextEmiDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        }
+      : null;
+
     return {
       profile: member,
-      latestLoan,
+      latestLoan: latestLoanData,
       latestStatement,
       recentNotices: recentNotices.map((delivery) => ({
         ...delivery.notice,

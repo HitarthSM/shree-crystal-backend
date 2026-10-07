@@ -39,11 +39,16 @@ export class SettingsController {
   @ApiOperation({ summary: 'Get mobile application version and update info (Public)' })
   @ApiResponse({ status: 200 })
   getAppVersion(@Query('platform') platform?: string) {
+    const defaultUrl =
+      platform === 'ios'
+        ? 'itms-apps://itunes.apple.com/app/id'
+        : 'market://details?id=com.shreecrystal.app';
+
     return {
       platform: platform || 'android',
       latestVersion: '1.0.0',
       minSupportedVersion: '1.0.0',
-      downloadUrl: '/apk/shree-crystal-latest.apk',
+      downloadUrl: process.env.APP_DOWNLOAD_URL || defaultUrl,
       releaseNotes:
         'Official Shree Crystal Credit Society mobile app for members, agents, and administrators.',
       forceUpdate: false,
