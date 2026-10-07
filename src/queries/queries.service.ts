@@ -44,14 +44,26 @@ export class QueriesService {
   }
 
   async getMemberQueries(memberId: string) {
-    return this.prisma.supportQuery.findMany({
+    const queries = await this.prisma.supportQuery.findMany({
       where: { memberId },
       orderBy: { updatedAt: 'desc' },
       include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+        },
         _count: {
           select: { messages: true },
         },
       },
+    });
+
+    return queries.map((q) => {
+      const { messages, ...rest } = q;
+      return {
+        ...rest,
+        message: messages[0]?.message ?? '',
+      };
     });
   }
 

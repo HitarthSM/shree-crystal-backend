@@ -21,4 +21,24 @@ export class SocietyDetailsDto {
   @IsUrl()
   @IsOptional()
   logoUrl?: string;
+
+  @ApiPropertyOptional({ example: 'State Bank of India' })
+  @IsString()
+  @IsOptional()
+  bankName?: string;
+
+  @ApiPropertyOptional({ example: '38942001920' })
+  @IsString()
+  @IsOptional()
+  accountNumber?: string;
+
+  @ApiPropertyOptional({ example: 'SBIN0001234' })
+  @IsString()
+  @IsOptional()
+  ifscCode?: string;
+
+  @ApiPropertyOptional({ example: 'shreecrystal@sbi' })
+  @IsString()
+  @IsOptional()
+  upiVpa?: string;
 }
