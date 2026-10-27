@@ -9,7 +9,7 @@ import { Prisma, BatchStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationService } from '../common/services/notification.service.js';
 import { BatchUploadStatementsDto } from './dto/batch-upload-statements.dto.js';
-import { ReplaceStatementDto } from './dto/replace-statement.dto.js';
+import { ReplaceStatementInput } from './dto/replace-statement.dto.js';
 import { WithdrawStatementDto } from './dto/withdraw-statement.dto.js';
 import { StatementQueryDto } from './dto/statement-query.dto.js';
 
@@ -129,24 +129,42 @@ export class StatementsService {
     const matchedStatements =
       (batch.matchedStatements as unknown as Array<{ memberId: string; fileUrl: string }>) || [];
 
-    // Create statements in transaction
     await this.prisma.$transaction(async (tx) => {
-      for (const st of matchedStatements) {
-        await tx.statement.create({
-          data: {
-            memberId: st.memberId,
-            period: batch.period,
-            category: batch.category,
-            fileUrl: st.fileUrl,
-            status: 'PUBLISHED',
-            uploadedById: adminId,
-          },
-        });
+      // Claim the batch first, atomically: of two concurrent publishes only one gets count 1.
+      const claim = await tx.statementBatch.updateMany({
+        where: { id: batchId, status: 'PENDING' },
+        data: { status: 'PUBLISHED', publishedAt: new Date() },
+      });
+      if (claim.count === 0) {
+        throw new BadRequestException('Batch is already published');
       }
 
-      await tx.statementBatch.update({
-        where: { id: batchId },
-        data: { status: 'PUBLISHED', publishedAt: new Date() },
+      // A member must not end up with two live statements for one period. Corrections go through
+      // "replace", which supersedes the old one; publishing must not silently do the same.
+      const memberIds = matchedStatements.map((st) => st.memberId);
+      const existing = await tx.statement.count({
+        where: {
+          memberId: { in: memberIds },
+          period: batch.period,
+          category: batch.category,
+          status: 'PUBLISHED',
+        },
+      });
+      if (existing > 0) {
+        throw new BadRequestException(
+          `${existing} member(s) already have a published ${batch.category} statement for ${batch.period}. Use "replace" to correct a statement.`,
+        );
+      }
+
+      await tx.statement.createMany({
+        data: matchedStatements.map((st) => ({
+          memberId: st.memberId,
+          period: batch.period,
+          category: batch.category,
+          fileUrl: st.fileUrl,
+          status: 'PUBLISHED' as const,
+          uploadedById: adminId,
+        })),
       });
 
       // Log activity
@@ -174,13 +192,22 @@ export class StatementsService {
     return { success: true, publishedCount: batch.matchedCount };
   }
 
-  async replaceStatement(id: string, adminId: string, dto: ReplaceStatementDto) {
+  async replaceStatement(id: string, adminId: string, dto: ReplaceStatementInput) {
     const oldStatement = await this.prisma.statement.findUnique({ where: { id } });
     if (!oldStatement) {
       throw new NotFoundException('Statement not found');
     }
 
     const newStatement = await this.prisma.$transaction(async (tx) => {
+      // Only a live statement can be replaced; the claim also stops two concurrent replaces.
+      const claim = await tx.statement.updateMany({
+        where: { id, status: 'PUBLISHED' },
+        data: { status: 'SUPERSEDED' },
+      });
+      if (claim.count === 0) {
+        throw new BadRequestException('Only a published statement can be replaced');
+      }
+
       const created = await tx.statement.create({
         data: {
           memberId: oldStatement.memberId,
@@ -191,11 +218,6 @@ export class StatementsService {
           uploadedById: adminId,
           supersedesId: oldStatement.id,
         },
-      });
-
-      await tx.statement.update({
-        where: { id },
-        data: { status: 'SUPERSEDED' },
       });
 
       await tx.activityLog.create({
@@ -222,10 +244,14 @@ export class StatementsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      const res = await tx.statement.update({
-        where: { id },
+      const claim = await tx.statement.updateMany({
+        where: { id, status: 'PUBLISHED' },
         data: { status: 'WITHDRAWN' },
       });
+      if (claim.count === 0) {
+        throw new BadRequestException('Only a published statement can be withdrawn');
+      }
+      const res = await tx.statement.findUniqueOrThrow({ where: { id } });
 
       await tx.activityLog.create({
         data: {

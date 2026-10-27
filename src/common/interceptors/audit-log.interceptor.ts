@@ -1,8 +1,16 @@
-import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } from '@nestjs/common';
+import {
+  CallHandler,
+  ExecutionContext,
+  HttpException,
+  Injectable,
+  NestInterceptor,
+} from '@nestjs/common';
 import { Request } from 'express';
-import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { Observable, from, throwError } from 'rxjs';
+import { catchError, mergeMap } from 'rxjs/operators';
+import { Prisma } from '@prisma/client';
+import { AuditTrailService, AuditActorType } from '../audit/audit-trail.service.js';
+import type { AuthenticatedUser } from '../../auth/types/auth.types.js';
 
 /** Mutating HTTP methods that trigger audit entries. */
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -28,78 +36,72 @@ declare module 'express' {
 }
 
 /**
- * AuditLogInterceptor — fires after every successful mutating request
- * (POST / PUT / PATCH / DELETE) and writes a structured audit entry.
+ * AuditLogInterceptor writes one audit entry for every mutating request (POST / PUT / PATCH /
+ * DELETE), successful or not, and waits for the write before the response goes out.
  *
- * Entry shape:
- *   actorId, actorRole, action (METHOD /path), resourceType, resourceId,
- *   ipAddress, timestamp, before (snapshot), after (snapshot).
+ * Auth routes are skipped: AuthService records richer, purpose-built events there (login,
+ * failed login, logout, token reuse, password change).
  *
- * Wired globally in main.ts. Never breaks the response — all DB errors are
- * caught and logged to console.error only.
- *
- * The AuditLog Prisma model is optional: if it doesn't exist yet, writes
- * are skipped gracefully and the entry is only console-logged.
+ * Request bodies are never logged: they can hold passwords and KYC numbers.
  */
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
-  private readonly logger = new Logger(AuditLogInterceptor.name);
-
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly audit: AuditTrailService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request>();
-    const method = request.method.toUpperCase();
 
-    if (!MUTATING_METHODS.has(method)) {
+    if (
+      !MUTATING_METHODS.has(request.method.toUpperCase()) ||
+      context.getClass().name === 'AuthController'
+    ) {
       return next.handle();
     }
 
+    const controller = context.getClass().name.replace(/Controller$/, '');
+
     return next.handle().pipe(
-      tap({
-        next: () => {
-          // Fire-and-forget — intentionally not awaited so we never slow the response.
-          void this.writeAuditLog(request);
-        },
+      mergeMap((value: unknown) =>
+        from(this.write(request, controller, 'SUCCESS', 200)).pipe(mergeMap(() => [value])),
+      ),
+      catchError((error: unknown) => {
+        const status = error instanceof HttpException ? error.getStatus() : 500;
+        return from(this.write(request, controller, 'FAILURE', status)).pipe(
+          mergeMap(() => throwError(() => error)),
+        );
       }),
     );
   }
 
-  private async writeAuditLog(request: Request): Promise<void> {
-    try {
-      const user = request.user as any;
+  private write(
+    request: Request,
+    controller: string,
+    outcome: 'SUCCESS' | 'FAILURE',
+    statusCode: number,
+  ): Promise<void> {
+    const user = request.user as AuthenticatedUser | undefined;
+    const ctx = request.auditContext ?? {};
+    const route = request.route as { path?: string } | undefined;
 
-      const actorId: string = user?.id ?? user?.memberId ?? 'anonymous';
-      const actorRole: string = user?.role ?? 'unknown';
-      const action = `${request.method.toUpperCase()} ${request.path}`;
-      const ipAddress =
-        (request.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ??
-        request.socket.remoteAddress ??
-        'unknown';
+    const actorType: AuditActorType = user ? user.userType : 'ANONYMOUS';
+    const meta: Prisma.InputJsonObject = {
+      outcome,
+      statusCode,
+      ...(user && 'role' in user && user.role ? { role: user.role } : {}),
+      ...(ctx.before !== undefined ? { before: ctx.before } : {}),
+      ...(ctx.after !== undefined ? { after: ctx.after } : {}),
+    };
 
-      const ctx = request.auditContext ?? {};
-
-      const entry = {
-        actorId,
-        actorType: actorRole.toUpperCase() === 'MEMBER' ? 'MEMBER' : 'ADMIN',
-        action,
-        entityType: ctx.resourceType ?? 'unknown',
-        entityId: ctx.resourceId ?? null,
-        ipAddress,
-        meta: {
-          ...(ctx.before !== undefined && { before: ctx.before }),
-          ...(ctx.after !== undefined && { after: ctx.after }),
-        },
-      };
-
-      if (typeof (this.prisma as any).activityLog?.create === 'function') {
-        await (this.prisma as any).activityLog.create({ data: entry });
-      } else {
-        this.logger.log(`[AUDIT] ${JSON.stringify(entry)}`);
-      }
-    } catch (err) {
-      // Never let audit logging break the application.
-      this.logger.error('Failed to write audit log entry', err);
-    }
+    return this.audit.record({
+      actorId: user?.userId ?? 'anonymous',
+      actorType,
+      action: `${request.method.toUpperCase()} ${request.baseUrl}${route?.path ?? request.path}`,
+      entityType: ctx.resourceType ?? controller,
+      entityId:
+        ctx.resourceId ?? (typeof request.params.id === 'string' ? request.params.id : null),
+      // request.ip honours the app's "trust proxy" setting; the raw X-Forwarded-For header is client-controlled.
+      ipAddress: request.ip ?? null,
+      meta,
+    });
   }
 }

@@ -15,6 +15,14 @@ export const envValidationSchema = Joi.object({
   JWT_EXPIRES_IN: Joi.string().default('7d'),
   DEFAULT_MEMBER_PASSWORD: Joi.string().required(),
 
+  // ─── Field encryption (Aadhaar / PAN) ─────────────────────────────────────
+  // Required in production; without it only the legacy public fallback key exists.
+  FIELD_ENCRYPTION_KEY: Joi.string().min(32).when('NODE_ENV', {
+    is: 'production',
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+
   // ─── SMS ──────────────────────────────────────────────────────────────────
   SMS_GATEWAY_KEY: Joi.string().required(),
 
@@ -26,6 +34,10 @@ export const envValidationSchema = Joi.object({
 
   // ─── CORS ─────────────────────────────────────────────────────────────────
   FRONTEND_ORIGIN: Joi.string().uri().required(),
+
+  // ─── File storage ─────────────────────────────────────────────────────────
+  /** Directory for statement PDFs and member attachments. Keep it outside any web-served path. */
+  UPLOAD_DIR: Joi.string().default('storage'),
 
   // ─── Swagger ──────────────────────────────────────────────────────────────
   SWAGGER_ENABLED: Joi.boolean().default(true),

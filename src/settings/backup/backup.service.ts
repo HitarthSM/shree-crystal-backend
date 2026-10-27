@@ -16,7 +16,11 @@ export class BackupService {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleScheduledBackup() {
     this.logger.log('Starting scheduled backup...');
-    await this.runBackup();
+    try {
+      await this.runBackup();
+    } catch {
+      // runBackup has already logged, recorded FAILED and notified; the scheduler must not crash.
+    }
   }
 
   async runBackup(): Promise<void> {
@@ -27,7 +31,6 @@ export class BackupService {
         status: 'IN_PROGRESS',
       });
 
-      // Simulate backup process
       await this.performBackupTask();
 
       await this.settingsService.updateBackupStatus({
@@ -38,10 +41,11 @@ export class BackupService {
     } catch (error) {
       this.logger.error(`Backup failed: ${error.message}`, error.stack);
 
-      await this.settingsService.updateBackupStatus({
-        lastBackupTimestamp: new Date(),
-        status: 'FAILED',
-      });
+      await this.settingsService
+        .updateBackupStatus({ lastBackupTimestamp: new Date(), status: 'FAILED' })
+        .catch((statusError: unknown) =>
+          this.logger.error('Could not record the failed backup status', statusError),
+        );
 
       await this.notifySuperAdminOfFailure(error.message);
 
@@ -50,10 +54,12 @@ export class BackupService {
   }
 
   // Method specifically isolated to be mockable in tests
-  protected async performBackupTask(): Promise<void> {
-    // In a real scenario, this would run pg_dump and upload to S3
-    // For now, it just resolves. We can mock this to throw in tests.
-    return Promise.resolve();
+  protected performBackupTask(): Promise<void> {
+    // No backup destination or dump job exists yet. Throwing keeps the recorded status truthful:
+    // reporting SUCCESS for a backup that never ran would give false assurance.
+    return Promise.reject(
+      new Error('Backups are not configured: no destination or dump job is set up.'),
+    );
   }
 
   private async notifySuperAdminOfFailure(errorMessage: string) {
@@ -61,24 +67,28 @@ export class BackupService {
       // Use strict: false because NotificationService is provided elsewhere
       const gateway = this.moduleRef.get(NotificationService, { strict: false });
 
-      const adminEmail =
-        (await this.settingsService.getSetting<string>('admin.superAdminEmail')) ||
-        'superadmin@shree-crystal.com';
-      const adminPhone =
-        (await this.settingsService.getSetting<string>('admin.superAdminPhone')) || '+1234567890';
+      const adminEmail = await this.settingsService.getSetting<string>('admin.superAdminEmail');
+      const adminPhone = await this.settingsService.getSetting<string>('admin.superAdminPhone');
+      if (!adminEmail && !adminPhone) {
+        this.logger.warn('No Super Admin contact is configured; backup failure was not notified.');
+        return;
+      }
 
       const message = `CRITICAL: Database backup failed. Error: ${errorMessage}`;
 
       this.logger.log('Notifying Super Admin about backup failure...');
 
       // We try both SMS and Email just in case one fails
-      await gateway
-        .sendEmail(adminEmail, 'Database Backup Failed', message)
-        .catch((e) => this.logger.error('Failed to send failure email', e));
-
-      await gateway
-        .sendSms(adminPhone, message)
-        .catch((e) => this.logger.error('Failed to send failure SMS', e));
+      if (adminEmail) {
+        await gateway
+          .sendEmail(adminEmail, 'Database Backup Failed', message)
+          .catch((e) => this.logger.error('Failed to send failure email', e));
+      }
+      if (adminPhone) {
+        await gateway
+          .sendSms(adminPhone, message)
+          .catch((e) => this.logger.error('Failed to send failure SMS', e));
+      }
     } catch (notifyError) {
       this.logger.error(
         'Failed to retrieve notification gateway for backup failure notification',

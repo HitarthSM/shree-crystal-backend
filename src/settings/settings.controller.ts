@@ -9,6 +9,7 @@ import {
   Param,
   Query,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { SettingsService } from './settings.service.js';
@@ -22,11 +23,13 @@ import { SecurityPolicyDto } from './dto/security-policy.dto.js';
 import { BackupStatusDto } from './dto/backup-status.dto.js';
 import { Public } from '../common/decorators/public.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
 import { AdminRole } from '../common/enums/index.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from '../auth/types/auth.types.js';
 
 @ApiTags('Settings')
+@UseGuards(RolesGuard)
 @Controller('settings')
 export class SettingsController {
   constructor(
@@ -159,11 +162,20 @@ export class SettingsController {
   @ApiResponse({ status: 200 })
   async updateAdminPublicContent(
     @Param('key') key: string,
-    @Body() dto: any,
+    @Body() dto: Record<string, unknown>,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     if (!key.startsWith('public.content.')) {
       throw new BadRequestException('Invalid key namespace');
+    }
+    // Served unauthenticated on the public site, so keep it a plain, bounded object.
+    if (
+      !dto ||
+      typeof dto !== 'object' ||
+      Array.isArray(dto) ||
+      JSON.stringify(dto).length > 100_000
+    ) {
+      throw new BadRequestException('Content must be a JSON object under 100 KB');
     }
     await this.settingsService.updateSetting(key, dto, user.userId);
   }

@@ -4,9 +4,9 @@ export class ReplaceStatementDto {
   @IsString()
   @IsNotEmpty()
   reason: string;
+}
 
-  // Assume file URL is provided directly in request or handled via file upload interceptor
-  @IsString()
-  @IsNotEmpty()
+/** What the service stores: the DTO fields plus the storage key the controller produced. */
+export interface ReplaceStatementInput extends ReplaceStatementDto {
   fileUrl: string;
 }

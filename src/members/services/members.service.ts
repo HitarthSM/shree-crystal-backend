@@ -4,10 +4,56 @@ import { PrismaService } from '../../common/prisma/prisma.service.js';
 import { EncryptionService, NotificationService } from '../../common/services/index.js';
 import { CreateMemberDto } from '../dto/create-member.dto.js';
 import { UpdateMemberDto } from '../dto/update-member.dto.js';
-import { Prisma, MemberStatus, ActionType, ImportStatus } from '@prisma/client';
+import { Prisma, MemberStatus, ActionType, ImportStatus, Gender } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import * as bcrypt from 'bcrypt';
 import { PendingActionService } from '../../pending-action/pending-action.service.js';
+
+/** Fields a MEMBER_EDIT proposal may carry. Aadhaar/PAN arrive already hashed/encrypted. */
+type MemberEditChanges = Partial<{
+  fullName: string;
+  fatherOrHusbandName: string;
+  dob: string;
+  gender: Gender;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  pincode: string;
+  mobile: string;
+  email: string;
+  nomineeName: string;
+  nomineeRelation: string;
+  nomineeContact: string;
+  shareCapital: string;
+  aadhaarHash: string;
+  aadhaarEncrypted: string;
+  panEncrypted: string;
+}>;
+
+type MemberEditPayload = { memberId: string; changes: MemberEditChanges; reason: string };
+type MemberStatusPayload = { memberId: string; newStatus: MemberStatus; reason: string };
+
+/** Credentials, lockout counters and the Aadhaar hash never leave the server. */
+function stripInternalFields<T extends object>(
+  member: T,
+): Omit<T, 'passwordHash' | 'aadhaarHash' | 'failedAttempts' | 'lockedUntil' | 'sessionVersion'> {
+  const {
+    passwordHash: _passwordHash,
+    aadhaarHash: _aadhaarHash,
+    failedAttempts: _failedAttempts,
+    lockedUntil: _lockedUntil,
+    sessionVersion: _sessionVersion,
+    ...rest
+  } = member as T & {
+    passwordHash?: unknown;
+    aadhaarHash?: unknown;
+    failedAttempts?: unknown;
+    lockedUntil?: unknown;
+    sessionVersion?: unknown;
+  };
+  return rest;
+}
 
 @Injectable()
 export class MembersService {
@@ -17,7 +63,14 @@ export class MembersService {
     private readonly notification: NotificationService,
     private readonly pendingActionService: PendingActionService,
     private readonly configService: ConfigService,
-  ) {}
+  ) {
+    this.pendingActionService.registerHandler(ActionType.MEMBER_EDIT, (payload) =>
+      this.applyMemberEdit(payload as MemberEditPayload),
+    );
+    this.pendingActionService.registerHandler(ActionType.MEMBER_STATUS_CHANGE, (payload) =>
+      this.applyStatusChange(payload as MemberStatusPayload),
+    );
+  }
 
   private async generateMemberId(): Promise<string> {
     const lastMember = await this.prisma.member.findFirst({
@@ -96,16 +149,22 @@ export class MembersService {
 
   async create(dto: CreateMemberDto) {
     const aadhaarHash = this.encryption.hash(dto.aadhaar);
+    // Rows created before the keyed hash was introduced still carry the old SHA-256.
+    const knownHashes = this.encryption.hashCandidates(dto.aadhaar);
     const existing = await this.prisma.member.findFirst({
       where: {
-        OR: [{ mobile: dto.mobile }, { aadhaarHash }, ...(dto.email ? [{ email: dto.email }] : [])],
+        OR: [
+          { mobile: dto.mobile },
+          { aadhaarHash: { in: knownHashes } },
+          ...(dto.email ? [{ email: dto.email }] : []),
+        ],
       },
     });
 
     if (existing) {
       if (existing.mobile === dto.mobile)
         throw new BadRequestException('Mobile number already registered');
-      if (existing.aadhaarHash === aadhaarHash)
+      if (knownHashes.includes(existing.aadhaarHash))
         throw new BadRequestException('Aadhaar number already registered');
       if (dto.email && existing.email === dto.email)
         throw new BadRequestException('Email already registered');
@@ -174,6 +233,10 @@ export class MembersService {
         .filter((m) => m.aadhaarHash)
         .map((m) => m.aadhaarHash),
     );
+    const existingMemberIds = new Set(
+      (await this.prisma.member.findMany({ select: { memberId: true } })).map((m) => m.memberId),
+    );
+    const fileMemberNos = new Set<string>();
     const existingMobiles = new Set(
       (await this.prisma.member.findMany({ select: { mobile: true } }))
         .filter((m) => m.mobile)
@@ -234,7 +297,12 @@ export class MembersService {
 
       const aadhaarHash = this.encryption.hash(aadhaar);
 
-      if (existingAadhaars.has(aadhaarHash)) rowErrors.push('Aadhaar already exists in DB');
+      if (existingMemberIds.has(memberNo)) rowErrors.push('Member number already exists in DB');
+      if (fileMemberNos.has(memberNo)) rowErrors.push('Duplicate member number in file');
+      fileMemberNos.add(memberNo);
+
+      if (this.encryption.hashCandidates(aadhaar).some((h) => existingAadhaars.has(h)))
+        rowErrors.push('Aadhaar already exists in DB');
       if (fileAadhaars.has(aadhaar)) rowErrors.push('Duplicate Aadhaar in file');
       if (existingMobiles.has(mobile)) rowErrors.push('Mobile already exists in DB');
       if (fileMobiles.has(mobile)) rowErrors.push('Duplicate Mobile in file');
@@ -273,7 +341,8 @@ export class MembersService {
           state: 'Unknown',
           pincode: '000000', // Excel doesn't have pincode clearly mapped
           mobile,
-          aadhaar,
+          // Never keep a plain Aadhaar number in the stored preview.
+          aadhaarEncrypted: this.encryption.encrypt(aadhaar),
         });
       }
     }
@@ -334,10 +403,13 @@ export class MembersService {
     const defaultPasswordHash = await bcrypt.hash(defaultPass, 10);
 
     const membersToCreate = validRows.map((row) => {
-      // Use the memberNo directly from the Excel file to ensure it matches statements!
-      const memberId = row.memberNo
-        ? String(row.memberNo)
-        : `SCC-${Math.floor(Math.random() * 10000)}`;
+      // The member number comes from the file so it matches the statement file names.
+      if (!row.memberNo) {
+        throw new BadRequestException('Import row is missing a member number');
+      }
+      const memberId = String(row.memberNo);
+      // Batches stored before the preview was encrypted still carry a plain `aadhaar`.
+      const aadhaar: string = row.aadhaar ?? this.encryption.decrypt(row.aadhaarEncrypted);
 
       return {
         memberId,
@@ -350,19 +422,22 @@ export class MembersService {
         state: row.state || 'Unknown',
         pincode: row.pincode || '000000',
         mobile: row.mobile,
-        aadhaarHash: this.encryption.hash(row.aadhaar),
-        aadhaarEncrypted: this.encryption.encrypt(row.aadhaar),
+        aadhaarHash: this.encryption.hash(aadhaar),
+        aadhaarEncrypted: this.encryption.encrypt(aadhaar),
       };
     });
 
     await this.prisma.$transaction(async (tx) => {
+      // Claim the batch first so two concurrent confirms cannot both import it.
+      const claim = await tx.importBatch.updateMany({
+        where: { id: batchId, status: ImportStatus.PENDING },
+        data: { status: ImportStatus.COMMITTED, committedAt: new Date() },
+      });
+      if (claim.count === 0) throw new BadRequestException('Batch is not pending');
+
       if (membersToCreate.length > 0) {
         await tx.member.createMany({ data: membersToCreate });
       }
-      await tx.importBatch.update({
-        where: { id: batchId },
-        data: { status: ImportStatus.COMMITTED, committedAt: new Date() },
-      });
     });
 
     return { success: true, count: membersToCreate.length };
@@ -392,10 +467,10 @@ export class MembersService {
 
     // Mask sensitive info
     return {
-      items: items.map(({ passwordHash: _ph, ...i }) => ({
-        ...i,
+      items: items.map((item) => ({
+        ...stripInternalFields(item),
         aadhaarEncrypted: 'MASKED',
-        panEncrypted: i.panEncrypted ? 'MASKED' : null,
+        panEncrypted: item.panEncrypted ? 'MASKED' : null,
       })),
       total,
       page,
@@ -421,7 +496,7 @@ export class MembersService {
     if (!member) throw new NotFoundException('Member not found');
 
     // Mask by default and strip sensitive authentication credentials
-    const { passwordHash: _ph, ...safeMember } = member;
+    const safeMember = stripInternalFields(member);
     safeMember.aadhaarEncrypted =
       'XXXX-XXXX-' + this.encryption.decrypt(member.aadhaarEncrypted).slice(-4);
     if (safeMember.panEncrypted) {
@@ -435,15 +510,14 @@ export class MembersService {
     const member = await this.prisma.member.findUnique({ where: { id } });
     if (!member) throw new NotFoundException('Member not found');
 
-    const { reason, ...changes } = dto;
-    if (changes.aadhaar) {
-      (changes as any).aadhaarHash = this.encryption.hash(changes.aadhaar);
-      (changes as any).aadhaarEncrypted = this.encryption.encrypt(changes.aadhaar);
-      delete changes.aadhaar;
+    const { reason, aadhaar, pan, ...plain } = dto;
+    const changes: MemberEditChanges = { ...plain };
+    if (aadhaar) {
+      changes.aadhaarHash = this.encryption.hash(aadhaar);
+      changes.aadhaarEncrypted = this.encryption.encrypt(aadhaar);
     }
-    if (changes.pan) {
-      (changes as any).panEncrypted = this.encryption.encrypt(changes.pan);
-      delete changes.pan;
+    if (pan) {
+      changes.panEncrypted = this.encryption.encrypt(pan);
     }
 
     return this.pendingActionService.propose(
@@ -451,6 +525,65 @@ export class MembersService {
       { memberId: id, changes, reason },
       adminId,
     );
+  }
+
+  /** Applies an approved MEMBER_EDIT. Only whitelisted fields are written. */
+  private async applyMemberEdit(payload: MemberEditPayload): Promise<void> {
+    const { memberId, changes } = payload;
+    const data: Prisma.MemberUpdateInput = {
+      fullName: changes.fullName,
+      fatherOrHusbandName: changes.fatherOrHusbandName,
+      gender: changes.gender,
+      addressLine1: changes.addressLine1,
+      addressLine2: changes.addressLine2,
+      city: changes.city,
+      state: changes.state,
+      pincode: changes.pincode,
+      mobile: changes.mobile,
+      email: changes.email,
+      nomineeName: changes.nomineeName,
+      nomineeRelation: changes.nomineeRelation,
+      nomineeContact: changes.nomineeContact,
+      aadhaarHash: changes.aadhaarHash,
+      aadhaarEncrypted: changes.aadhaarEncrypted,
+      panEncrypted: changes.panEncrypted,
+      dob: changes.dob ? new Date(changes.dob) : undefined,
+      shareCapital: changes.shareCapital ? new Prisma.Decimal(changes.shareCapital) : undefined,
+    };
+    try {
+      await this.prisma.member.update({ where: { id: memberId }, data, select: { id: true } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') throw new NotFoundException('Member not found');
+        if (error.code === 'P2002') {
+          throw new BadRequestException(
+            'Mobile, email or Aadhaar already belongs to another member',
+          );
+        }
+      }
+      throw error;
+    }
+  }
+
+  /** Applies an approved MEMBER_STATUS_CHANGE; a non-ACTIVE member is signed out everywhere. */
+  private async applyStatusChange(payload: MemberStatusPayload): Promise<void> {
+    const { memberId, newStatus } = payload;
+    if (!Object.values(MemberStatus).includes(newStatus)) {
+      throw new BadRequestException('Invalid member status');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.member.update({
+        where: { id: memberId },
+        data: { status: newStatus },
+        select: { id: true },
+      });
+      if (newStatus !== MemberStatus.ACTIVE) {
+        await tx.authSession.updateMany({
+          where: { memberId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+    });
   }
 
   async changeStatus(id: string, status: MemberStatus, reason: string, adminId: string) {
@@ -471,7 +604,13 @@ export class MembersService {
       // Latest active loan
       this.prisma.memberLoan.findFirst({
         where: { memberId, status: 'ACTIVE' },
-        include: { loanType: true, rateHistory: true },
+        select: {
+          id: true,
+          principalAmount: true,
+          outstandingAmount: true,
+          createdAt: true,
+          loanType: { select: { name: true } },
+        },
         orderBy: { createdAt: 'desc' },
       }),
       // Latest published statement
@@ -496,18 +635,14 @@ export class MembersService {
       throw new NotFoundException('Member not found');
     }
 
-    const rate = latestLoan?.rateHistory?.newRate ?? latestLoan?.loanType?.interestRate;
+    // No EMI or due date: the society keeps no repayment schedule here, so nothing is invented.
     const latestLoanData = latestLoan
       ? {
-          ...latestLoan,
+          id: latestLoan.id,
           type: latestLoan.loanType?.name || 'Standard Member Loan',
-          emiAmount: rate
-            ? Math.round(
-                (Number(latestLoan.outstandingAmount) * (Number(rate) / 100)) / 12 +
-                  Number(latestLoan.outstandingAmount) / 24,
-              )
-            : null,
-          nextEmiDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          principalAmount: latestLoan.principalAmount,
+          outstandingAmount: latestLoan.outstandingAmount,
+          createdAt: latestLoan.createdAt,
         }
       : null;
 

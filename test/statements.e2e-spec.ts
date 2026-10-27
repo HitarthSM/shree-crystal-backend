@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
+import { StorageService } from '../src/storage/storage.service';
 
 describe('MemberStatementsController (e2e)', () => {
   let app: INestApplication;
@@ -88,13 +89,19 @@ describe('MemberStatementsController (e2e)', () => {
       member1 = await createDummyMember('M1-E2E', '9999999991');
       member2 = await createDummyMember('M2-E2E', '9999999992');
 
+      // Real stored PDFs: downloads are streamed from storage, not redirected.
+      const storage = app.get(StorageService);
+      const pdf = Buffer.from('%PDF-1.4\n%e2e statement');
+      const file1 = await storage.saveStatement(pdf);
+      const file2 = await storage.saveStatement(pdf);
+
       // Create PUBLISHED statements for them
       statement1 = await prisma.statement.create({
         data: {
           memberId: member1.id,
           period: '2024-Q1',
           category: 'GENERAL',
-          fileUrl: 'https://test-bucket/m1-statement.pdf',
+          fileUrl: file1.key,
           status: 'PUBLISHED',
           uploadedById: admin.id,
         },
@@ -105,7 +112,7 @@ describe('MemberStatementsController (e2e)', () => {
           memberId: member2.id,
           period: '2024-Q1',
           category: 'GENERAL',
-          fileUrl: 'https://test-bucket/m2-statement.pdf',
+          fileUrl: file2.key,
           status: 'PUBLISHED',
           uploadedById: admin.id,
         },
@@ -135,10 +142,12 @@ describe('MemberStatementsController (e2e)', () => {
     });
 
     it('Member 1 should be able to download their own statement', async () => {
-      await request(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .get(`/statements/me/${statement1.id}/download`)
         .set('Authorization', `Bearer ${token1}`)
-        .expect(302); // Expecting a redirect because controller uses res.redirect(fileUrl)
+        .expect(200);
+      expect(res.headers['content-type']).toContain('application/pdf');
+      expect(res.headers['cache-control']).toContain('no-store');
     });
 
     it("Member 1 should NOT be able to download Member 2's statement", async () => {

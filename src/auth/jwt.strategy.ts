@@ -10,6 +10,7 @@ interface TokenClaims {
   sub?: string;
   userType?: UserType;
   version?: number;
+  sid?: string;
   type?: 'ACCESS' | 'REFRESH';
 }
 
@@ -27,7 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: TokenClaims): Promise<AuthenticatedUser> {
-    const { sub, userType, version, type } = payload;
+    const { sub, userType, version, type, sid } = payload;
 
     if (!sub || !userType || version === undefined) {
       throw new UnauthorizedException('Invalid token payload');
@@ -58,7 +59,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Session invalidated');
     }
 
+    // Logging out revokes the session, so its access token must stop working immediately.
+    if (sid) {
+      const session = await this.prisma.authSession.findUnique({
+        where: { id: sid },
+        select: { revokedAt: true },
+      });
+      if (!session || session.revokedAt) {
+        throw new UnauthorizedException('Session ended');
+      }
+    }
+
     return {
+      sessionId: sid,
       userId: user.id,
       userType,
       role: 'role' in user ? user.role : undefined,

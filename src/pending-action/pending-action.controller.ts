@@ -20,13 +20,13 @@ export class PendingActionController {
     return this.pendingActionService.findAll(actionType);
   }
 
-  @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
+  @Roles(AdminRole.SUPER_ADMIN)
   @Post(':id/approve')
   async approve(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.pendingActionService.approve(id, user.userId);
   }
 
-  @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
+  @Roles(AdminRole.SUPER_ADMIN)
   @Post(':id/reject')
   async reject(
     @Param('id') id: string,

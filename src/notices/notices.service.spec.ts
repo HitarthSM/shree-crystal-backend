@@ -52,6 +52,7 @@ describe('NoticesService', () => {
       noticeId,
       status: DeliveryStatus.PENDING,
       channel: NoticeChannel.SMS,
+      notice: { title: 'AGM on Sunday', body: 'Please attend at 10 AM.' },
       member: {
         memberId: `M-${i}`,
         mobile: i < 48 ? `+10000000${i}` : 'invalid',
@@ -65,6 +66,12 @@ describe('NoticesService', () => {
 
     // Verify 50 gateway calls were made
     expect(mockGateway.sendSms).toHaveBeenCalledTimes(50);
+
+    // Members receive the actual notice, not a generic placeholder.
+    expect(mockGateway.sendSms).toHaveBeenCalledWith(
+      expect.any(String),
+      'AGM on Sunday\nPlease attend at 10 AM.',
+    );
 
     // Verify 50 updates were made
     expect(mockPrisma.noticeDelivery.update).toHaveBeenCalledTimes(50);

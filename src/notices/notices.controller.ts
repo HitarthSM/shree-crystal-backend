@@ -1,3 +1,4 @@
+import { NoticeListQueryDto } from './dto/notice-list-query.dto.js';
 import {
   Controller,
   Get,
@@ -29,12 +30,8 @@ export class NoticesController {
 
   @Get()
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR, AdminRole.VIEWER)
-  findAll(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('category') category?: string,
-  ) {
-    return this.noticesService.findAll(page ? +page : 1, limit ? +limit : 10, category);
+  findAll(@Query() query: NoticeListQueryDto) {
+    return this.noticesService.findAll(query.page, query.limit, query.category);
   }
 
   @Patch(':id')

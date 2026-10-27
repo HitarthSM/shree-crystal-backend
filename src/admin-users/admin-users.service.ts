@@ -3,6 +3,18 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { UpdateAdminRoleDto } from './dto/update-admin-role.dto';
 import * as bcrypt from 'bcrypt';
+import { randomInt } from 'crypto';
+
+// No look-alike characters (0/O, 1/l/I): the password is read out or copied by hand once.
+const TEMP_PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+
+function generateTempPassword(length = 14): string {
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    out += TEMP_PASSWORD_ALPHABET[randomInt(TEMP_PASSWORD_ALPHABET.length)];
+  }
+  return out;
+}
 
 @Injectable()
 export class AdminUsersService {
@@ -17,8 +29,8 @@ export class AdminUsersService {
       throw new ConflictException('Admin user with this email already exists');
     }
 
-    // Generate temp password (8 random alphanumeric characters)
-    const tempPassword = Math.random().toString(36).slice(-8);
+    // Cryptographically random; Math.random() is predictable and must never make a credential.
+    const tempPassword = generateTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 10);
 
     const newUser = await this.prisma.adminUser.create({

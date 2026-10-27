@@ -10,6 +10,7 @@ import { PrismaModule } from './common/prisma/prisma.module.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor.js';
 import { AuthModule } from './auth/auth.module.js';
+import { AuditModule } from './common/audit/audit.module.js';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
@@ -25,6 +26,7 @@ import { SettingsModule } from './settings/settings.module.js';
 import { NotificationModule } from './common/services/notification.module.js';
 import { NoticesModule } from './notices/notices.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
+import { StorageModule } from './storage/storage.module.js';
 @Module({
   imports: [
     // ── Config (global, validated) ─────────────────────────────────────────
@@ -51,6 +53,7 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
 
     // ── Prisma (global DB client) ─────────────────────────────────────────
     PrismaModule,
+    AuditModule,
 
     // ── Health check ──────────────────────────────────────────────────────
     // ── Health check ──────────────────────────────────────────────────────
@@ -71,6 +74,7 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
     LoanConfigModule,
     QueriesModule,
     DashboardModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [

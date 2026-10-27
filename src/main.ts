@@ -65,9 +65,11 @@ async function bootstrap() {
 
   // ── Swagger ───────────────────────────────────────────────────────────────
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
-  const swaggerEnabled = configService.get<boolean>('SWAGGER_ENABLED', true);
+  // Never expose API docs in production, whatever SWAGGER_ENABLED says.
+  const swaggerEnabled =
+    nodeEnv !== 'production' && configService.get<boolean>('SWAGGER_ENABLED', true);
 
-  if (swaggerEnabled || nodeEnv !== 'production') {
+  if (swaggerEnabled) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('Shree Crystal Credit Society API')
       .setDescription('Backend API for the Cooperative Credit Society Management System')
@@ -98,7 +100,7 @@ async function bootstrap() {
   await app.listen(port);
 
   console.warn(`\n🚀 Application running on: http://localhost:${port}/api`);
-  if (swaggerEnabled || nodeEnv !== 'production') {
+  if (swaggerEnabled) {
     console.warn(`📚 Swagger docs:           http://localhost:${port}/api/docs`);
   }
   console.warn(`🏥 Health check:           http://localhost:${port}/health`);

@@ -1,13 +1,23 @@
-import { IsString, IsNotEmpty, IsEnum, IsOptional, IsDateString } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsEnum,
+  IsOptional,
+  IsDateString,
+  IsUrl,
+  MaxLength,
+} from 'class-validator';
 import { NoticeCategory } from '@prisma/client';
 
 export class CreateNoticeDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(200)
   title: string;
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(5000)
   body: string;
 
   @IsEnum(NoticeCategory)
@@ -18,7 +28,8 @@ export class CreateNoticeDto {
   @IsOptional()
   expiresAt?: string;
 
-  @IsString()
+  // http(s) only: a stored `javascript:` link would run when someone clicks it.
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
   @IsOptional()
   attachmentUrl?: string;
 
@@ -32,10 +43,12 @@ export class CreateNoticeDto {
 export class UpdateNoticeDto {
   @IsString()
   @IsOptional()
+  @MaxLength(200)
   title?: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(5000)
   body?: string;
 
   @IsEnum(NoticeCategory)
@@ -46,7 +59,8 @@ export class UpdateNoticeDto {
   @IsOptional()
   expiresAt?: string;
 
-  @IsString()
+  // http(s) only: a stored `javascript:` link would run when someone clicks it.
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
   @IsOptional()
   attachmentUrl?: string;
 }

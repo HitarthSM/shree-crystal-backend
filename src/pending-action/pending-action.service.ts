@@ -156,7 +156,7 @@ export class PendingActionService {
       ? { actionType, status: PendingActionStatus.PENDING }
       : { status: PendingActionStatus.PENDING };
 
-    return this.prisma.pendingAction.findMany({
+    const actions = await this.prisma.pendingAction.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       include: {
@@ -165,5 +165,22 @@ export class PendingActionService {
         },
       },
     });
+    return actions.map((action) => ({ ...action, payload: redactPayload(action.payload) }));
   }
+}
+
+/** KYC values are stored hashed/encrypted in payloads; approvers only need to know they changed. */
+const SENSITIVE_PAYLOAD_KEYS = ['aadhaarHash', 'aadhaarEncrypted', 'panEncrypted'] as const;
+
+function redactPayload(payload: Prisma.JsonValue): Prisma.JsonValue {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+  const changes = payload['changes'];
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return payload;
+
+  const { aadhaarHash, aadhaarEncrypted, panEncrypted, ...safe } = changes;
+  const redacted: Prisma.JsonObject = { ...safe };
+  if (aadhaarHash !== undefined || aadhaarEncrypted !== undefined)
+    redacted['aadhaar'] = '(changed)';
+  if (panEncrypted !== undefined) redacted['pan'] = '(changed)';
+  return { ...payload, changes: redacted };
 }

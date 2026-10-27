@@ -7,6 +7,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  NotImplementedException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MembersService } from '../services/members.service.js';
@@ -14,11 +15,15 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { MemberOwnershipGuard } from '../../common/guards/member-ownership.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from '../../auth/types/auth.types.js';
+import { StorageService } from '../../storage/storage.service.js';
 
 @Controller('members/me')
 @UseGuards(JwtAuthGuard, MemberOwnershipGuard)
 export class MembersMeController {
-  constructor(private readonly membersService: MembersService) {}
+  constructor(
+    private readonly membersService: MembersService,
+    private readonly storage: StorageService,
+  ) {}
 
   @Get()
   getProfile(@CurrentUser() user: AuthenticatedUser) {
@@ -36,28 +41,28 @@ export class MembersMeController {
       limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
     }),
   )
-  uploadAttachment(@UploadedFile() file?: Express.Multer.File) {
+  async uploadAttachment(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     if (!file) {
       throw new BadRequestException('File is required');
     }
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    if (!allowed.includes(file.mimetype)) {
-      throw new BadRequestException('Only JPEG, PNG, WEBP, and PDF files are allowed');
-    }
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    // The type is read from the file's own bytes; the declared MIME type is ignored.
+    const saved = await this.storage.saveAttachment(user.userId, file.buffer);
     return {
-      filename: safeName,
-      mimetype: file.mimetype,
-      size: file.size,
-      url: `https://uploads.shreecrystal.com/${Date.now()}_${safeName}`,
+      filename: file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_'),
+      mimetype: saved.mime,
+      size: saved.size,
+      // Storage key: pass it as attachmentUrl on a support message.
+      url: saved.key,
     };
   }
 
   @Post('change-requests')
-  proposeChange(@Body() changes: Record<string, unknown>, @CurrentUser() user: AuthenticatedUser) {
-    // In a full implementation, this creates a MemberChangeRequest
-    // For now, returning a stub indicating it is pending approval
-    return { status: 'PENDING', message: 'Change request submitted for admin approval' };
+  proposeChange(): never {
+    // Not built yet. Claiming "submitted" would be a lie: nothing is stored and no admin sees it.
+    throw new NotImplementedException('Profile change requests are not available yet.');
   }
 
   @Get('change-requests')

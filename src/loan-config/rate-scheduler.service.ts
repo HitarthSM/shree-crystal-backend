@@ -14,50 +14,34 @@ export class RateSchedulerService {
     this.logger.log('Checking for future rates to apply...');
     const now = new Date();
 
-    // 1. Find all RateHistory records where effectiveFrom <= now
-    // We want the LATEST one for each schemeId that hasn't been applied yet.
-    // However, Prisma makes this complex. We can just query those where effectiveFrom <= now.
-    // And for each, we check if the current scheme's interestRate != newRate.
-
-    const pendingRateHistories = await this.prisma.rateHistory.findMany({
-      where: {
-        effectiveFrom: {
-          lte: now,
-        },
-      },
-      orderBy: {
-        effectiveFrom: 'asc', // Apply older ones first just in case
-      },
+    // Oldest first, so the last row seen for a scheme is the one currently in force.
+    const due = await this.prisma.rateHistory.findMany({
+      where: { effectiveFrom: { lte: now } },
+      orderBy: [{ effectiveFrom: 'asc' }, { createdAt: 'asc' }],
+      select: { schemeId: true, schemeType: true, newRate: true },
     });
 
-    for (const history of pendingRateHistories) {
-      if (history.schemeType === RateEntityType.LOAN_TYPE) {
-        const loanType = await this.prisma.loanType.findUnique({
-          where: { id: history.schemeId },
-        });
+    const latestPerScheme = new Map<string, (typeof due)[number]>();
+    for (const history of due) {
+      latestPerScheme.set(`${history.schemeType}:${history.schemeId}`, history);
+    }
 
-        // Only apply if the rate is different (meaning it hasn't been applied by a newer record)
-        // Note: we convert Decimal to Number for comparison, but Prisma Decimal returns an object.
-        if (loanType && Number(loanType.interestRate) !== Number(history.newRate)) {
-          await this.prisma.loanType.update({
-            where: { id: loanType.id },
-            data: { interestRate: history.newRate },
-          });
-          this.logger.log(`Applied future rate ${history.newRate} to LOAN_TYPE ${loanType.name}`);
+    for (const history of latestPerScheme.values()) {
+      if (history.schemeType === RateEntityType.LOAN_TYPE) {
+        const result = await this.prisma.loanType.updateMany({
+          where: { id: history.schemeId, NOT: { interestRate: history.newRate } },
+          data: { interestRate: history.newRate },
+        });
+        if (result.count > 0) {
+          this.logger.log(`Applied rate ${history.newRate} to LOAN_TYPE ${history.schemeId}`);
         }
       } else if (history.schemeType === RateEntityType.DEPOSIT_SCHEME) {
-        const scheme = await this.prisma.depositScheme.findUnique({
-          where: { id: history.schemeId },
+        const result = await this.prisma.depositScheme.updateMany({
+          where: { id: history.schemeId, NOT: { interestRate: history.newRate } },
+          data: { interestRate: history.newRate },
         });
-
-        if (scheme && Number(scheme.interestRate) !== Number(history.newRate)) {
-          await this.prisma.depositScheme.update({
-            where: { id: scheme.id },
-            data: { interestRate: history.newRate },
-          });
-          this.logger.log(
-            `Applied future rate ${history.newRate} to DEPOSIT_SCHEME ${scheme.name}`,
-          );
+        if (result.count > 0) {
+          this.logger.log(`Applied rate ${history.newRate} to DEPOSIT_SCHEME ${history.schemeId}`);
         }
       }
     }

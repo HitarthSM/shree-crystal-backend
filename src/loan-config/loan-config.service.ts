@@ -194,57 +194,59 @@ export class LoanConfigService {
     const effectiveFromDate = new Date(payload.effectiveFrom);
     const now = new Date();
 
-    await this.prisma.rateHistory.create({
-      data: {
-        schemeId: payload.schemeId,
-        schemeType: payload.schemeType,
-        oldRate: payload.oldRate,
-        newRate: payload.newRate,
-        effectiveFrom: effectiveFromDate,
-        changedById: payload.changedById,
-        approvedById: approvedById,
-      },
-    });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.rateHistory.create({
+        data: {
+          schemeId: payload.schemeId,
+          schemeType: payload.schemeType,
+          oldRate: payload.oldRate,
+          newRate: payload.newRate,
+          effectiveFrom: effectiveFromDate,
+          changedById: payload.changedById,
+          approvedById: approvedById,
+        },
+      });
 
-    if (effectiveFromDate <= now) {
-      if (payload.schemeType === RateEntityType.LOAN_TYPE) {
-        await this.prisma.loanType.update({
-          where: { id: payload.schemeId },
-          data: {
-            ...payload.data,
-            interestRate: payload.newRate,
-          },
-        });
-      } else {
-        await this.prisma.depositScheme.update({
-          where: { id: payload.schemeId },
-          data: {
-            ...payload.data,
-            interestRate: payload.newRate,
-          },
-        });
-      }
-      this.logger.log(`Applied rate change to ${payload.schemeType} immediately.`);
-    } else {
-      const dataWithoutRate = { ...payload.data };
-      delete dataWithoutRate.interestRate;
-
-      if (Object.keys(dataWithoutRate).length > 0) {
+      if (effectiveFromDate <= now) {
         if (payload.schemeType === RateEntityType.LOAN_TYPE) {
-          await this.prisma.loanType.update({
+          await tx.loanType.update({
             where: { id: payload.schemeId },
-            data: dataWithoutRate,
+            data: {
+              ...payload.data,
+              interestRate: payload.newRate,
+            },
           });
         } else {
-          await this.prisma.depositScheme.update({
+          await tx.depositScheme.update({
             where: { id: payload.schemeId },
-            data: dataWithoutRate,
+            data: {
+              ...payload.data,
+              interestRate: payload.newRate,
+            },
           });
         }
+        this.logger.log(`Applied rate change to ${payload.schemeType} immediately.`);
+      } else {
+        const dataWithoutRate = { ...payload.data };
+        delete dataWithoutRate.interestRate;
+
+        if (Object.keys(dataWithoutRate).length > 0) {
+          if (payload.schemeType === RateEntityType.LOAN_TYPE) {
+            await tx.loanType.update({
+              where: { id: payload.schemeId },
+              data: dataWithoutRate,
+            });
+          } else {
+            await tx.depositScheme.update({
+              where: { id: payload.schemeId },
+              data: dataWithoutRate,
+            });
+          }
+        }
+        this.logger.log(
+          `Rate is in future (${effectiveFromDate.toISOString()}), scheduled job will apply it. Applied other fields immediately.`,
+        );
       }
-      this.logger.log(
-        `Rate is in future (${effectiveFromDate.toISOString()}), scheduled job will apply it. Applied other fields immediately.`,
-      );
-    }
+    });
   }
 }

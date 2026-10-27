@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { QueriesService } from './queries.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationService } from '../common/services/notification.service.js';
+import { StorageService } from '../storage/storage.service';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { QueryStatus, SenderType } from '@prisma/client';
 
@@ -24,6 +25,7 @@ describe('QueriesService', () => {
         QueriesService,
         { provide: PrismaService, useValue: prismaService },
         { provide: NotificationService, useValue: notificationService },
+        { provide: StorageService, useValue: { exists: jest.fn().mockResolvedValue(true) } },
       ],
     }).compile();
 

@@ -82,7 +82,11 @@ export class NoticesService {
     const deliveries = await this.prisma.noticeDelivery.findMany({
       where: {
         memberId,
-        notice: { isActive: true },
+        notice: {
+          isActive: true,
+          // An expired notice must stop showing to members.
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
       },
       include: { notice: true },
       orderBy: { notice: { createdAt: 'desc' } },
@@ -123,6 +127,7 @@ export class NoticesService {
       },
       include: {
         member: true,
+        notice: { select: { title: true, body: true } },
       },
     });
 
@@ -139,14 +144,13 @@ export class NoticesService {
       try {
         let success = false;
 
-        // In a real app we'd fetch the message body from Notice or pass it in.
-        // For simplicity, we use a placeholder message body.
-        const message = `Notice from Shree Crystal Cooperative Society. Please check your dashboard for details.`;
+        const { title, body } = delivery.notice;
+        const message = `${title}\n${body}`;
 
         if (delivery.channel === 'SMS' && delivery.member.mobile) {
           success = await this.gateway.sendSms(delivery.member.mobile, message);
         } else if (delivery.channel === 'EMAIL' && delivery.member.email) {
-          success = await this.gateway.sendEmail(delivery.member.email, 'Society Notice', message);
+          success = await this.gateway.sendEmail(delivery.member.email, title, message);
         } else {
           throw new Error('Member missing contact info for the requested channel');
         }

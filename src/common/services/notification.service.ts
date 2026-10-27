@@ -96,16 +96,12 @@ export class NotificationService {
         return false;
       }
 
-      this.logger.log(`[SMS] Sending SMS to ${to} (Message length: ${message.length})`);
-
-      try {
-        if (to === '+0000000000' || to === 'invalid') {
-          throw new Error('Invalid mobile number simulated from provider');
-        }
-        return true;
-      } catch (error: any) {
-        throw new Error(`SMS Provider Error: ${error.message}`);
-      }
+      // No SMS provider is integrated yet. Report failure rather than pretend the message
+      // left the server: callers record the delivery as FAILED, which is the truth.
+      this.logger.warn(
+        `SMS not sent (message length ${message.length}): no SMS provider is integrated.`,
+      );
+      return false;
     }, `sendSms to ${to}`);
   }
 

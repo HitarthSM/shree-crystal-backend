@@ -40,3 +40,6 @@ prisma/*.db-journal
 Thumbs.db
 
 /generated/prisma
+
+# ── Uploaded files (statements, attachments) ─────────────────────────────────
+storage/

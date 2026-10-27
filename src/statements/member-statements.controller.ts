@@ -4,13 +4,17 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { MemberOwnershipGuard } from '../common/guards/member-ownership.guard.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { StatementsService } from './statements.service.js';
+import { StorageService } from '../storage/storage.service.js';
 import { StatementQueryDto } from './dto/statement-query.dto.js';
 import type { AuthMemberUser } from '../auth/types/auth.types.js';
 
 @Controller('statements/me')
 @UseGuards(JwtAuthGuard, MemberOwnershipGuard)
 export class MemberStatementsController {
-  constructor(private readonly statementsService: StatementsService) {}
+  constructor(
+    private readonly statementsService: StatementsService,
+    private readonly storage: StorageService,
+  ) {}
 
   @Get()
   async findMemberStatements(
@@ -26,9 +30,17 @@ export class MemberStatementsController {
     @CurrentUser() user: AuthMemberUser,
     @Res() res: Response,
   ) {
-    const fileUrl = await this.statementsService.getMemberStatementFileUrl(id, user.memberId);
-    // In a real application, you might stream the file from S3 using the URL.
-    // Here we'll just redirect to the URL or return it.
-    res.redirect(fileUrl);
+    const fileKey = await this.statementsService.getMemberStatementFileUrl(id, user.memberId);
+    // Streamed through the API so the ownership check above applies to every download.
+    const { stream, mime, size } = await this.storage.open(fileKey);
+    res.set({
+      'Content-Type': mime,
+      'Content-Length': String(size),
+      'Content-Disposition': `attachment; filename="statement-${id}.pdf"`,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    stream.on('error', () => res.destroy());
+    stream.pipe(res);
   }
 }

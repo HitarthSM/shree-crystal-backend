@@ -213,6 +213,7 @@ model Member {
   loans            MemberLoan[]
   supportQueries   SupportQuery[]
   changeRequests   MemberChangeRequest[]
+  authSessions     AuthSession[]
 
   @@index([status])
   @@index([memberId])
@@ -252,10 +253,43 @@ model AdminUser {
   importBatches      ImportBatch[]
   statementsUploaded Statement[]
   statementBatches   StatementBatch[]
+  authSessions       AuthSession[]
 
   @@index([email])
   @@index([role])
   @@map("admin_users")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// AUTH SESSION
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// One row per signed-in device. The refresh token carries this row's id plus a
+/// random jti; only the SHA-256 of the current jti is stored. Each refresh rotates
+/// the jti, so presenting an older one means the token was copied and the session is revoked.
+/// Exactly one of adminUserId / memberId is set (enforced by a CHECK in the migration).
+model AuthSession {
+  id           String    @id @default(cuid())
+  adminUserId  String?
+  memberId     String?
+  jtiHash      String
+  /// The jti before the latest rotation, honoured for a short grace window (lost responses, parallel tabs).
+  prevJtiHash  String?
+  rotatedAt    DateTime?
+  /// Bumped with sessionVersion on password change; a mismatch means the session is stale.
+  userVersion  Int
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+  member    Member?    @relation(fields: [memberId], references: [id], onDelete: Restrict)
+
+  @@index([adminUserId])
+  @@index([memberId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

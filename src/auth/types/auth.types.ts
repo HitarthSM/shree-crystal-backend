@@ -7,6 +7,8 @@ export interface JwtUserPayload {
   userType: UserType;
   role?: AdminRole;
   version: number;
+  /** AuthSession id of the device making the request (absent on pre-session tokens). */
+  sessionId?: string;
 }
 
 export type AuthAdminUser = AdminUser & JwtUserPayload;

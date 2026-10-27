@@ -11,6 +11,7 @@ import { CreateQueryDto } from './dto/create-query.dto.js';
 import { AddMessageDto } from './dto/add-message.dto.js';
 import { AdminReplyDto } from './dto/admin-reply.dto.js';
 import { QueryFilterDto } from './dto/query-filter.dto.js';
+import { StorageService, attachmentOwner } from '../storage/storage.service.js';
 import { SenderType, QueryStatus } from '@prisma/client';
 
 @Injectable()
@@ -18,11 +19,27 @@ export class QueriesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationService: NotificationService,
+    private readonly storage: StorageService,
   ) {}
+
+  /** A member may only attach files they uploaded themselves. */
+  private assertOwnAttachment(memberId: string, attachmentUrl?: string): void {
+    if (attachmentUrl && attachmentOwner(attachmentUrl) !== memberId) {
+      throw new BadRequestException('Attachment was not uploaded by you');
+    }
+  }
+
+  private async assertAttachmentExists(attachmentUrl?: string): Promise<void> {
+    if (attachmentUrl && !(await this.storage.exists(attachmentUrl))) {
+      throw new BadRequestException('Attachment file not found');
+    }
+  }
 
   // ─── MEMBER METHODS ────────────────────────────────────────────────────────
 
   async createMemberQuery(memberId: string, dto: CreateQueryDto) {
+    this.assertOwnAttachment(memberId, dto.attachmentUrl);
+    await this.assertAttachmentExists(dto.attachmentUrl);
     return this.prisma.supportQuery.create({
       data: {
         memberId,
@@ -105,6 +122,8 @@ export class QueriesService {
   }
 
   async addMemberMessage(memberId: string, queryId: string, dto: AddMessageDto) {
+    this.assertOwnAttachment(memberId, dto.attachmentUrl);
+    await this.assertAttachmentExists(dto.attachmentUrl);
     const query = await this.getMemberQueryById(memberId, queryId);
 
     if (query.status === QueryStatus.RESOLVED) {
@@ -171,6 +190,7 @@ export class QueriesService {
   }
 
   async addAdminReply(adminId: string, queryId: string, dto: AdminReplyDto) {
+    await this.assertAttachmentExists(dto.attachmentUrl);
     const query = await this.prisma.supportQuery.findUnique({
       where: { id: queryId },
     });

@@ -10,6 +10,7 @@ import {
   UploadedFile,
   Query,
   ParseIntPipe,
+  ParseEnumPipe,
   DefaultValuePipe,
   ParseFilePipe,
   MaxFileSizeValidator,
@@ -18,6 +19,7 @@ import {
 import { MembersService } from '../services/members.service.js';
 import { CreateMemberDto } from '../dto/create-member.dto.js';
 import { UpdateMemberDto } from '../dto/update-member.dto.js';
+import { ChangeMemberStatusDto } from '../dto/change-member-status.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -43,7 +45,8 @@ export class MembersController {
 
   @Post('import')
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
-  @UseInterceptors(FileInterceptor('file'))
+  // The limit is enforced while streaming, so an oversized body is cut off before it is buffered.
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
   importExcel(
     @UploadedFile(
       new ParseFilePipe({
@@ -74,7 +77,7 @@ export class MembersController {
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('search') search?: string,
-    @Query('status') status?: MemberStatus,
+    @Query('status', new ParseEnumPipe(MemberStatus, { optional: true })) status?: MemberStatus,
   ) {
     return this.membersService.findAll(page, limit, search, status);
   }
@@ -106,11 +109,10 @@ export class MembersController {
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.OPERATOR)
   changeStatus(
     @Param('id') id: string,
-    @Body('status') status: MemberStatus,
-    @Body('reason') reason: string,
+    @Body() dto: ChangeMemberStatusDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.membersService.changeStatus(id, status, reason, user.userId);
+    return this.membersService.changeStatus(id, dto.status, dto.reason, user.userId);
   }
 
   @Patch('change-requests/:id')

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, Ip } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
 import { LoginDto, ChangePasswordDto, RefreshTokenDto } from './dto/auth.dto';
 import { Public } from '../common/decorators/public.decorator.js';
@@ -15,23 +15,26 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto.identifier, loginDto.password);
+  async login(@Body() loginDto: LoginDto, @Ip() ip: string) {
+    return this.authService.login(loginDto.identifier, loginDto.password, ip);
   }
 
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('refresh')
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.refresh(refreshTokenDto.refreshToken);
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto, @Ip() ip: string) {
+    return this.authService.refresh(refreshTokenDto.refreshToken, ip);
   }
 
+  // A stolen access token must not be usable to guess the current password at the global rate.
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @UseGuards(JwtAuthGuard)
   @AllowFirstLogin()
   @Post('change-password')
   async changePassword(
     @Body() changePasswordDto: ChangePasswordDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Ip() ip: string,
   ) {
     // Changing the password invalidates all sessions; the caller gets a fresh token pair.
     const tokens = await this.authService.changePassword(
@@ -39,6 +42,7 @@ export class AuthController {
       user.userType,
       changePasswordDto.currentPassword,
       changePasswordDto.newPassword,
+      ip,
     );
     return { message: 'Password changed successfully', ...tokens };
   }
@@ -72,8 +76,8 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @AllowFirstLogin()
   @Post('logout')
-  async logout(@CurrentUser() user: AuthenticatedUser) {
-    await this.authService.logout(user.userId, user.userType);
+  async logout(@CurrentUser() user: AuthenticatedUser, @Ip() ip: string) {
+    await this.authService.logout(user.userId, user.userType, user.sessionId, ip);
     return { message: 'Logged out successfully' };
   }
 }

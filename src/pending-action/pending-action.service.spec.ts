@@ -137,4 +137,34 @@ describe('PendingActionService', () => {
       );
     });
   });
+
+  describe('findAll', () => {
+    it('never returns Aadhaar/PAN hashes or ciphertext in payloads', async () => {
+      (prismaService.pendingAction.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'p1',
+          actionType: ActionType.MEMBER_EDIT,
+          payload: {
+            memberId: 'm1',
+            reason: 'fix',
+            changes: {
+              city: 'Surat',
+              aadhaarHash: 'hash',
+              aadhaarEncrypted: 'cipher',
+              panEncrypted: 'cipher2',
+            },
+          },
+        },
+      ]);
+
+      const [action] = await service.findAll();
+      const text = JSON.stringify(action.payload);
+
+      expect(text).not.toContain('hash');
+      expect(text).not.toContain('cipher');
+      expect(action.payload).toMatchObject({
+        changes: { city: 'Surat', aadhaar: '(changed)', pan: '(changed)' },
+      });
+    });
+  });
 });
