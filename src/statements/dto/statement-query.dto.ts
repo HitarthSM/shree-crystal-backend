@@ -5,7 +5,7 @@ import { StatementStatus } from '@prisma/client';
 export class StatementQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
-  memberId?: string;
+  membershipNumber?: string;
 
   @IsOptional()
   @IsString()

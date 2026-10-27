@@ -301,12 +301,12 @@ export class StatementsService {
   }
 
   async findAdminStatements(query: StatementQueryDto) {
-    const { page = 1, limit = 10, memberId, period, category, status } = query;
+    const { page = 1, limit = 10, membershipNumber, period, category, status } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.StatementWhereInput = {};
-    if (memberId) {
-      const member = await this.prisma.member.findUnique({ where: { membershipNumber: memberId } });
+    if (membershipNumber) {
+      const member = await this.prisma.member.findUnique({ where: { membershipNumber } });
       if (member) {
         where.memberId = member.id;
       } else {
@@ -331,11 +331,11 @@ export class StatementsService {
     return { data, total, page, limit };
   }
 
-  async findMemberStatements(memberId: string, query: StatementQueryDto) {
+  async findMemberStatements(membershipNumber: string, query: StatementQueryDto) {
     const { page = 1, limit = 10, period, category } = query;
     const skip = (page - 1) * limit;
 
-    const member = await this.prisma.member.findUnique({ where: { membershipNumber: memberId } });
+    const member = await this.prisma.member.findUnique({ where: { membershipNumber } });
     if (!member) {
       throw new NotFoundException('Member not found');
     }

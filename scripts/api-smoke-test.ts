@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import axios from 'axios';
 
 const API_URL = 'http://localhost:3000/api';
@@ -23,8 +24,8 @@ async function runComprehensiveTest() {
     const adminLogin = await axios.post(
       `${API_URL}/auth/login`,
       {
-        identifier: 'admin@shreecrystal.local',
-        password: 'ChangeMe@2024',
+        identifier: process.env.SUPER_ADMIN_EMAIL ?? '',
+        password: process.env.SUPER_ADMIN_PASSWORD ?? '',
       },
       { validateStatus: () => true },
     );
@@ -136,6 +137,22 @@ async function runComprehensiveTest() {
     if (memLogin.status === 201 && memLogin.data?.data?.accessToken) {
       memberToken = memLogin.data.data.accessToken;
       console.log('✅ Member Auth: SUCCESS');
+
+      // New members must replace the society-issued password before using any other endpoint.
+      const changePasswordRes = await axios.post(
+        `${API_URL}/auth/change-password`,
+        {
+          currentPassword: process.env.DEFAULT_MEMBER_PASSWORD ?? '',
+          newPassword: 'Smoke#Test2026',
+        },
+        { headers: { Authorization: `Bearer ${memberToken}` }, validateStatus: () => true },
+      );
+      const rotated = changePasswordRes.data?.data?.accessToken;
+      if (changePasswordRes.status >= 300 || !rotated) {
+        throw new Error(`Member password change failed: ${changePasswordRes.status}`);
+      }
+      memberToken = rotated;
+      console.log('✅ Member Forced Password Change: SUCCESS');
     } else {
       throw new Error(`Member login failed: ${memLogin.status}`);
     }
@@ -219,7 +236,7 @@ async function runComprehensiveTest() {
     );
 
     if (createQueryRes.status === 201) {
-      console.log('✅ Create Query (Member): SUCCESS');
+      console.log('✅ Create Support Ticket (Member): SUCCESS');
       testTicketId = createQueryRes.data.data.id;
 
       const replyRes = await axios.post(
@@ -231,12 +248,12 @@ async function runComprehensiveTest() {
       );
 
       if (replyRes.status === 201) {
-        console.log('✅ Admin Reply to Query: SUCCESS');
+        console.log('✅ Admin Reply to Support Ticket: SUCCESS');
       } else {
-        console.error(`❌ Admin Reply to Query: FAILED (${replyRes.status})`);
+        console.error(`❌ Admin Reply to Support Ticket: FAILED (${replyRes.status})`);
       }
     } else {
-      console.error(`❌ Create Query (Member): FAILED (${createQueryRes.status})`);
+      console.error(`❌ Create Support Ticket (Member): FAILED (${createQueryRes.status})`);
     }
 
     console.log('\n🎉 ALL TESTS COMPLETED SUCCESSFULLY!');
