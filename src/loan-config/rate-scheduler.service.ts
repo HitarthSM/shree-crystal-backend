@@ -18,30 +18,30 @@ export class RateSchedulerService {
     const due = await this.prisma.rateHistory.findMany({
       where: { effectiveFrom: { lte: now } },
       orderBy: [{ effectiveFrom: 'asc' }, { createdAt: 'asc' }],
-      select: { schemeId: true, schemeType: true, newRate: true },
+      select: { entityId: true, entityType: true, newRate: true },
     });
 
     const latestPerScheme = new Map<string, (typeof due)[number]>();
     for (const history of due) {
-      latestPerScheme.set(`${history.schemeType}:${history.schemeId}`, history);
+      latestPerScheme.set(`${history.entityType}:${history.entityId}`, history);
     }
 
     for (const history of latestPerScheme.values()) {
-      if (history.schemeType === RateEntityType.LOAN_TYPE) {
+      if (history.entityType === RateEntityType.LOAN_TYPE) {
         const result = await this.prisma.loanType.updateMany({
-          where: { id: history.schemeId, NOT: { interestRate: history.newRate } },
+          where: { id: history.entityId, NOT: { interestRate: history.newRate } },
           data: { interestRate: history.newRate },
         });
         if (result.count > 0) {
-          this.logger.log(`Applied rate ${history.newRate} to LOAN_TYPE ${history.schemeId}`);
+          this.logger.log(`Applied rate ${history.newRate} to LOAN_TYPE ${history.entityId}`);
         }
-      } else if (history.schemeType === RateEntityType.DEPOSIT_SCHEME) {
+      } else if (history.entityType === RateEntityType.DEPOSIT_SCHEME) {
         const result = await this.prisma.depositScheme.updateMany({
-          where: { id: history.schemeId, NOT: { interestRate: history.newRate } },
+          where: { id: history.entityId, NOT: { interestRate: history.newRate } },
           data: { interestRate: history.newRate },
         });
         if (result.count > 0) {
-          this.logger.log(`Applied rate ${history.newRate} to DEPOSIT_SCHEME ${history.schemeId}`);
+          this.logger.log(`Applied rate ${history.newRate} to DEPOSIT_SCHEME ${history.entityId}`);
         }
       }
     }

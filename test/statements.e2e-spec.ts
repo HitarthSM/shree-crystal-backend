@@ -46,24 +46,24 @@ describe('MemberStatementsController (e2e)', () => {
       });
       await prisma.member.deleteMany({
         where: {
-          memberId: { in: ['M1-E2E', 'M2-E2E'] },
+          membershipNumber: { in: ['M1-E2E', 'M2-E2E'] },
         },
       });
 
       // Helper to generate a dummy member
-      const createDummyMember = async (mid: string, mobile: string) => {
+      const createDummyMember = async (mid: string, mobileNumber: string) => {
         return prisma.member.create({
           data: {
             id: `${mid}_ID_E2E`,
-            memberId: mid,
+            membershipNumber: mid,
             fullName: 'Test Member ' + mid,
-            dob: new Date('1990-01-01'),
+            dateOfBirth: new Date('1990-01-01'),
             gender: 'MALE',
             addressLine1: 'Test Address',
             city: 'Test City',
             state: 'Test State',
             pincode: '123456',
-            mobile,
+            mobileNumber,
             aadhaarHash: 'hash_' + mid,
             aadhaarEncrypted: 'enc_' + mid,
             isFirstLogin: false,

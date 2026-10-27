@@ -38,9 +38,9 @@ describe('AuthController (e2e)', () => {
       testMember = await prisma.member.create({
         data: {
           fullName: 'Test Member Full',
-          dob: new Date('1990-01-01'),
+          dateOfBirth: new Date('1990-01-01'),
           gender: 'MALE',
-          mobile: '9999999999'.slice(0, 6) + Date.now().toString().slice(-4),
+          mobileNumber: '9999999999'.slice(0, 6) + Date.now().toString().slice(-4),
           addressLine1: 'Test Address',
           city: 'Pune',
           state: 'MH',
@@ -50,13 +50,14 @@ describe('AuthController (e2e)', () => {
           passwordHash,
           isFirstLogin: true,
           failedAttempts: 0,
-          memberId: 'M-TEST-' + Date.now(),
+          membershipNumber: 'M-TEST-' + Date.now(),
         },
       });
     });
 
     afterAll(async () => {
       // Cleanup
+      await prisma.authSession.deleteMany({ where: { memberId: testMember.id } });
       await prisma.member.delete({ where: { id: testMember.id } });
     });
 
@@ -64,7 +65,7 @@ describe('AuthController (e2e)', () => {
       const res = await request(app.getHttpServer())
         .post('/auth/login')
         .send({
-          identifier: testMember.mobile,
+          identifier: testMember.mobileNumber,
           password: 'Password123',
         })
         .expect(201);
@@ -81,7 +82,7 @@ describe('AuthController (e2e)', () => {
 
       const res = await request(app.getHttpServer())
         .post('/auth/login')
-        .send({ identifier: testMember.mobile, password: 'WrongPass1' })
+        .send({ identifier: testMember.mobileNumber, password: 'WrongPass1' })
         .expect(401);
 
       const member = await prisma.member.findUnique({ where: { id: testMember.id } });
@@ -94,7 +95,7 @@ describe('AuthController (e2e)', () => {
       const res = await request(app.getHttpServer())
         .post('/auth/login')
         .send({
-          identifier: testMember.mobile,
+          identifier: testMember.mobileNumber,
           password: 'Password123',
         })
         .expect(401);

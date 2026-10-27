@@ -6,14 +6,14 @@ const ctxFor = (path: string) =>
     getHandler: jest.fn(),
     getClass: jest.fn(),
     switchToHttp: () => ({
-      getRequest: () => ({ user: { memberId: 'SCC-1' }, params: {}, path }),
+      getRequest: () => ({ user: { membershipNumber: 'SCC-1' }, params: {}, path }),
     }),
   }) as unknown as ExecutionContext;
 
 describe('MemberOwnershipGuard — /me detection', () => {
   const guard = new MemberOwnershipGuard();
 
-  it.each(['/api/members/me', '/api/statements/me/abc/download', '/api/queries/me/q1'])(
+  it.each(['/api/members/me', '/api/statements/me/abc/download', '/api/support-tickets/me/q1'])(
     'treats %s as self-scoped',
     (path) => expect(guard.canActivate(ctxFor(path))).toBe(true),
   );

@@ -1,7 +1,7 @@
 {
   "name": "shree-crystal-backend",
   "version": "0.0.1",
-  "description": "",
+  "description": "REST API for the Shree Crystal Credit Society member and admin portals (NestJS, Prisma, PostgreSQL).",
   "author": "",
   "private": true,
   "license": "UNLICENSED",

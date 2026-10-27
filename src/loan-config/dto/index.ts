@@ -46,7 +46,7 @@ export class CreateLoanTypeDto {
 
   @IsOptional()
   @IsBoolean()
-  active?: boolean;
+  isActive?: boolean;
 }
 
 export class UpdateLoanTypeDto {
@@ -90,7 +90,7 @@ export class UpdateLoanTypeDto {
 
   @IsOptional()
   @IsBoolean()
-  active?: boolean;
+  isActive?: boolean;
 
   @IsOptional()
   @IsDateString()
@@ -114,7 +114,7 @@ export class CreateDepositSchemeDto {
 
   @IsOptional()
   @IsBoolean()
-  active?: boolean;
+  isActive?: boolean;
 }
 
 export class UpdateDepositSchemeDto {
@@ -137,7 +137,7 @@ export class UpdateDepositSchemeDto {
 
   @IsOptional()
   @IsBoolean()
-  active?: boolean;
+  isActive?: boolean;
 
   @IsOptional()
   @IsDateString()

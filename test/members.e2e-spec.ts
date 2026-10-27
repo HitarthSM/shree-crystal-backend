@@ -55,11 +55,13 @@ describe('MembersController (e2e)', () => {
 
   afterAll(async () => {
     // Cleanup
-    await prisma.importBatch.deleteMany({ where: { adminId: adminUser.id } });
+    await prisma.importBatch.deleteMany({ where: { createdById: adminUser.id } });
     if (testMember) {
       await prisma.member.delete({ where: { id: testMember.id } });
     }
-    const newMembers = await prisma.member.findMany({ where: { mobile: { startsWith: '987' } } });
+    const newMembers = await prisma.member.findMany({
+      where: { mobileNumber: { startsWith: '987' } },
+    });
     for (const m of newMembers) {
       await prisma.member.delete({ where: { id: m.id } });
     }
@@ -75,19 +77,19 @@ describe('MembersController (e2e)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         fullName: 'Initial Test Member',
-        dob: '1990-01-01',
+        dateOfBirth: '1990-01-01',
         gender: 'MALE',
         addressLine1: 'Test Address',
         city: 'Mumbai',
         state: 'MH',
         pincode: '400001',
-        mobile: '9876543210',
+        mobileNumber: '9876543210',
         aadhaar: '123412341234',
       })
       .expect(201);
 
     testMember = res.body;
-    expect(testMember.memberId).toBeDefined();
+    expect(testMember.membershipNumber).toBeDefined();
     expect(testMember.aadhaarHash).toBeDefined();
   });
 
@@ -100,7 +102,7 @@ describe('MembersController (e2e)', () => {
       'MEMBER_NO',
       'MEMBER_NAME',
       'fatherOrHusbandName',
-      'dob',
+      'dateOfBirth',
       'gender',
       'addressLine1',
       'addressLine2',
@@ -181,11 +183,11 @@ describe('MembersController (e2e)', () => {
 
     // 4. Verify in DB
     const members = await prisma.member.findMany({
-      where: { mobile: { in: ['9876543210', '9876543211', '9876543212'] } },
+      where: { mobileNumber: { in: ['9876543210', '9876543211', '9876543212'] } },
     });
 
     expect(members.length).toBe(2);
-    const validMember = members.find((m) => m.mobile === '9876543211');
+    const validMember = members.find((m) => m.mobileNumber === '9876543211');
     expect(validMember).toBeDefined();
     expect(validMember.fullName).toBe('Valid Member');
 

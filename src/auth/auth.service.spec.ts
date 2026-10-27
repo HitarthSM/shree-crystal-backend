@@ -3,14 +3,14 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { AuditTrailService } from '../common/audit/audit-trail.service';
+import { AuditLogService } from '../common/audit/audit-log.service';
 
 const HASH = bcrypt.hashSync('Correct1pass', 4);
 
 const baseMember = {
   id: 'm1',
-  memberId: 'SCC-1',
-  mobile: '9999999999',
+  membershipNumber: 'SCC-1',
+  mobileNumber: '9999999999',
   passwordHash: HASH,
   status: 'ACTIVE',
   failedAttempts: 0,
@@ -96,7 +96,7 @@ function build() {
   const service = new AuthService(
     prisma as unknown as PrismaService,
     jwt,
-    audit as unknown as AuditTrailService,
+    audit as unknown as AuditLogService,
   );
   return { prisma, jwt, service, sessions, audit };
 }

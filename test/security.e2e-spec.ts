@@ -5,7 +5,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { QueryStatus } from '@prisma/client';
+import { TicketStatus } from '@prisma/client';
 
 describe('Security and Access Control (e2e)', () => {
   let app: INestApplication;
@@ -21,7 +21,7 @@ describe('Security and Access Control (e2e)', () => {
 
   let queryA: any;
   let statementA: any;
-  let pendingActionA: any; // e.g. a change request if we can mock one, but wait, change-requests is a GET in MembersController which is admin only, or MembersMeController?
+  let pendingActionA: any; // e.g. a change request if we can mock one, but wait, change-requests is a GET in MembersController which is admin only, or MemberProfileController?
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -49,9 +49,9 @@ describe('Security and Access Control (e2e)', () => {
     // Create Member A
     memberA = await prisma.member.create({
       data: {
-        memberId: 'M-TESTA-' + Date.now(),
+        membershipNumber: 'M-TESTA-' + Date.now(),
         fullName: 'Member A Full',
-        dob: new Date('1990-01-01'),
+        dateOfBirth: new Date('1990-01-01'),
         gender: 'MALE',
         addressLine1: 'Test Address',
         city: 'Pune',
@@ -59,7 +59,7 @@ describe('Security and Access Control (e2e)', () => {
         pincode: '411001',
         aadhaarHash: 'hashA-' + Date.now(),
         aadhaarEncrypted: 'encA-' + Date.now(),
-        mobile: '999999' + Date.now().toString().slice(-4),
+        mobileNumber: '999999' + Date.now().toString().slice(-4),
         passwordHash,
         isFirstLogin: false,
         failedAttempts: 0,
@@ -69,9 +69,9 @@ describe('Security and Access Control (e2e)', () => {
     // Create Member B
     memberB = await prisma.member.create({
       data: {
-        memberId: 'M-TESTB-' + Date.now(),
+        membershipNumber: 'M-TESTB-' + Date.now(),
         fullName: 'Member B Full',
-        dob: new Date('1990-01-01'),
+        dateOfBirth: new Date('1990-01-01'),
         gender: 'FEMALE',
         addressLine1: 'Test Address',
         city: 'Pune',
@@ -79,7 +79,7 @@ describe('Security and Access Control (e2e)', () => {
         pincode: '411001',
         aadhaarHash: 'hashB-' + Date.now(),
         aadhaarEncrypted: 'encB-' + Date.now(),
-        mobile: '888888' + Date.now().toString().slice(-4),
+        mobileNumber: '888888' + Date.now().toString().slice(-4),
         passwordHash,
         isFirstLogin: false,
         failedAttempts: 0,
@@ -100,7 +100,7 @@ describe('Security and Access Control (e2e)', () => {
     });
 
     // Create mock resources for Member A
-    queryA = await prisma.supportQuery.create({
+    queryA = await prisma.supportTicket.create({
       data: {
         memberId: memberA.id,
         subject: 'Test Query A',
@@ -130,10 +130,13 @@ describe('Security and Access Control (e2e)', () => {
     await prisma.statement.deleteMany({
       where: { memberId: { in: [memberA?.id, memberB?.id].filter(Boolean) } },
     });
-    await prisma.queryMessage.deleteMany({
+    await prisma.supportTicketMessage.deleteMany({
       where: { senderId: { in: [memberA?.id, memberB?.id].filter(Boolean) } },
     });
-    await prisma.supportQuery.deleteMany({
+    await prisma.supportTicket.deleteMany({
+      where: { memberId: { in: [memberA?.id, memberB?.id].filter(Boolean) } },
+    });
+    await prisma.authSession.deleteMany({
       where: { memberId: { in: [memberA?.id, memberB?.id].filter(Boolean) } },
     });
     await prisma.member.deleteMany({
@@ -146,14 +149,14 @@ describe('Security and Access Control (e2e)', () => {
 
   describe('1. Unauthenticated Access', () => {
     it('should return 401 when hitting a protected endpoint without JWT', async () => {
-      await request(app.getHttpServer()).get('/activity-log').expect(401);
+      await request(app.getHttpServer()).get('/audit-logs').expect(401);
     });
   });
 
   describe('2. Role-based Access Control', () => {
     it('should return 403 (not 401) when authenticated member hits an admin-only endpoint', async () => {
       const res = await request(app.getHttpServer())
-        .get('/activity-log')
+        .get('/audit-logs')
         .set('Authorization', `Bearer ${memberAToken}`)
         .expect(403);
 
@@ -164,7 +167,7 @@ describe('Security and Access Control (e2e)', () => {
   describe('3. Cross-Member Access Protection', () => {
     it("should reject Member B from accessing Member A's query", async () => {
       const res = await request(app.getHttpServer())
-        .get(`/queries/me/${queryA.id}`)
+        .get(`/support-tickets/me/${queryA.id}`)
         .set('Authorization', `Bearer ${memberBToken}`);
 
       // Typically a service throws 404 if it explicitly queries where: { id: reqId, memberId: currentUserId }
@@ -187,7 +190,7 @@ describe('Security and Access Control (e2e)', () => {
     it('should perform a full login to get a fresh token', async () => {
       const loginRes = await request(app.getHttpServer())
         .post('/auth/login')
-        .send({ identifier: memberA.mobile, password: 'Password123' });
+        .send({ identifier: memberA.mobileNumber, password: 'Password123' });
 
       if (loginRes.status !== 201) {
         console.error('Login Failed with 400:', loginRes.body);

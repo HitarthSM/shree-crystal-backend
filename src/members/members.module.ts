@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common';
 import { MembersController } from './controllers/members.controller.js';
-import { MembersMeController } from './controllers/members-me.controller.js';
+import { MemberProfileController } from './controllers/member-profile.controller.js';
 import { MembersService } from './services/members.service.js';
 import { PrismaModule } from '../common/prisma/prisma.module.js';
-import { PendingActionModule } from '../pending-action/pending-action.module.js';
+import { PendingActionsModule } from '../pending-actions/pending-actions.module.js';
 import { EncryptionService } from '../common/services/index.js';
 
 @Module({
-  imports: [PrismaModule, PendingActionModule],
-  controllers: [MembersMeController, MembersController],
+  imports: [PrismaModule, PendingActionsModule],
+  controllers: [MemberProfileController, MembersController],
   providers: [MembersService, EncryptionService],
   exports: [MembersService],
 })

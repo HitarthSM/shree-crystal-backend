@@ -3,9 +3,9 @@ import { RateSchedulerService } from './rate-scheduler.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 
 describe('RateSchedulerService', () => {
-  const history = (schemeId: string, newRate: number) => ({
-    schemeId,
-    schemeType: RateEntityType.LOAN_TYPE,
+  const history = (entityId: string, newRate: number) => ({
+    entityId,
+    entityType: RateEntityType.LOAN_TYPE,
     newRate,
   });
 

@@ -21,7 +21,7 @@ export class MemberStatementsController {
     @CurrentUser() user: AuthMemberUser,
     @Query() query: StatementQueryDto,
   ) {
-    return this.statementsService.findMemberStatements(user.memberId, query);
+    return this.statementsService.findMemberStatements(user.membershipNumber, query);
   }
 
   @Get(':id/download')
@@ -30,7 +30,10 @@ export class MemberStatementsController {
     @CurrentUser() user: AuthMemberUser,
     @Res() res: Response,
   ) {
-    const fileKey = await this.statementsService.getMemberStatementFileUrl(id, user.memberId);
+    const fileKey = await this.statementsService.getMemberStatementFileUrl(
+      id,
+      user.membershipNumber,
+    );
     // Streamed through the API so the ownership check above applies to every download.
     const { stream, mime, size } = await this.storage.open(fileKey);
     res.set({

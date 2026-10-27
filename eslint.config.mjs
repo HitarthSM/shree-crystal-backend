@@ -20,7 +20,7 @@ export default tseslint.config(
       sourceType: 'commonjs',
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['test/*.ts', 'test-api.ts'],
+          allowDefaultProject: ['test/*.ts', 'scripts/*.ts', 'prisma/*.ts'],
         },
         tsconfigRootDir: import.meta.dirname,
       },

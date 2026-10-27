@@ -7,14 +7,14 @@ import { JwtService } from '@nestjs/jwt';
 import { AdminRole, InterestType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { RateSchedulerService } from '../src/loan-config/rate-scheduler.service';
-import { PendingActionService } from '../src/pending-action/pending-action.service';
+import { PendingActionsService } from '../src/pending-actions/pending-actions.service';
 
 describe('LoanConfigController (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let jwtService: JwtService;
   let rateScheduler: RateSchedulerService;
-  let pendingActionService: PendingActionService;
+  let pendingActionService: PendingActionsService;
   let adminToken1: string;
   let adminToken2: string;
   let admin1: any;
@@ -32,7 +32,7 @@ describe('LoanConfigController (e2e)', () => {
     prisma = moduleFixture.get<PrismaService>(PrismaService);
     jwtService = moduleFixture.get<JwtService>(JwtService);
     rateScheduler = moduleFixture.get<RateSchedulerService>(RateSchedulerService);
-    pendingActionService = moduleFixture.get<PendingActionService>(PendingActionService);
+    pendingActionService = moduleFixture.get<PendingActionsService>(PendingActionsService);
 
     // Create two admins for maker-checker
     const pwd = await bcrypt.hash('Password123!', 10);
@@ -69,7 +69,7 @@ describe('LoanConfigController (e2e)', () => {
     });
 
     // Enable maker-checker for RATE_CHANGE
-    await prisma.settings.create({
+    await prisma.setting.create({
       data: {
         key: 'maker_checker.required.RATE_CHANGE',
         value: true,
@@ -82,7 +82,7 @@ describe('LoanConfigController (e2e)', () => {
     await prisma.rateHistory.deleteMany();
     await prisma.loanType.deleteMany();
     await prisma.pendingAction.deleteMany();
-    await prisma.settings.deleteMany({ where: { key: 'maker_checker.required.RATE_CHANGE' } });
+    await prisma.setting.deleteMany({ where: { key: 'maker_checker.required.RATE_CHANGE' } });
     await prisma.adminUser.deleteMany({ where: { id: { in: [admin1.id, admin2.id] } } });
     await app.close();
   });
@@ -100,7 +100,7 @@ describe('LoanConfigController (e2e)', () => {
         processingFee: 5000,
         minAmount: 100000,
         maxAmount: 5000000,
-        active: true,
+        isActive: true,
       })
       .expect(201);
     const loanType = createRes.body;
@@ -108,8 +108,8 @@ describe('LoanConfigController (e2e)', () => {
     // We must manually add an initial RateHistory so we can create a MemberLoan
     const initialRateHistory = await prisma.rateHistory.create({
       data: {
-        schemeId: loanType.id,
-        schemeType: 'LOAN_TYPE',
+        entityId: loanType.id,
+        entityType: 'LOAN_TYPE',
         newRate: 8.5,
         effectiveFrom: new Date(),
         changedById: admin1.id,
@@ -121,15 +121,15 @@ describe('LoanConfigController (e2e)', () => {
     // We need a dummy member first
     const member = await prisma.member.create({
       data: {
-        memberId: `TEST-${Date.now()}`,
+        membershipNumber: `TEST-${Date.now()}`,
         fullName: 'Test Member',
-        dob: new Date('1990-01-01'),
+        dateOfBirth: new Date('1990-01-01'),
         gender: 'MALE',
         addressLine1: 'Addr',
         city: 'City',
         state: 'State',
         pincode: '123456',
-        mobile: `${Date.now()}`.substring(0, 10),
+        mobileNumber: `${Date.now()}`.substring(0, 10),
         aadhaarHash: `hash-${Date.now()}`,
         aadhaarEncrypted: 'enc',
         isFirstLogin: false,
@@ -165,7 +165,7 @@ describe('LoanConfigController (e2e)', () => {
 
     // 4. Approve the Rate Change
     const pendingActions = await pendingActionService.findAll('RATE_CHANGE');
-    const ourAction = pendingActions.find((a) => a.payload.schemeId === loanType.id);
+    const ourAction = pendingActions.find((a) => a.payload.entityId === loanType.id);
     expect(ourAction).toBeDefined();
 
     await pendingActionService.approve(ourAction.id, admin2.id);
@@ -183,7 +183,7 @@ describe('LoanConfigController (e2e)', () => {
     // Actually, we can just cheat and update the RateHistory in DB to make effectiveFrom in the past
     // so that when we run RateSchedulerService, it picks it up.
     await prisma.rateHistory.updateMany({
-      where: { schemeId: loanType.id },
+      where: { entityId: loanType.id },
       data: { effectiveFrom: new Date(Date.now() - 10000) }, // 10 seconds ago
     });
 

@@ -26,7 +26,7 @@ import { Roles } from '../../common/decorators/roles.decorator.js';
 import { AdminRole, MemberStatus } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { PendingActionService } from '../../pending-action/pending-action.service.js';
+import { PendingActionsService } from '../../pending-actions/pending-actions.service.js';
 import type { AuthenticatedUser } from '../../auth/types/auth.types.js';
 
 @Controller('members')
@@ -34,7 +34,7 @@ import type { AuthenticatedUser } from '../../auth/types/auth.types.js';
 export class MembersController {
   constructor(
     private readonly membersService: MembersService,
-    private readonly pendingActionService: PendingActionService,
+    private readonly pendingActionService: PendingActionsService,
   ) {}
 
   @Post()

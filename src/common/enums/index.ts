@@ -45,7 +45,7 @@ export enum StatementStatus {
 
 // ── Member Queries ────────────────────────────────────────────────────────────
 
-export enum QueryStatus {
+export enum TicketStatus {
   OPEN = 'OPEN',
   IN_PROGRESS = 'IN_PROGRESS',
   RESOLVED = 'RESOLVED',

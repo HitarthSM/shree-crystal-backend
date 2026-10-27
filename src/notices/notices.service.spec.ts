@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NoticesService } from './notices.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
-import { NotificationService } from '../common/services/notification.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { DeliveryStatus, NoticeChannel } from '@prisma/client';
 
 describe('NoticesService', () => {
@@ -31,7 +31,7 @@ describe('NoticesService', () => {
       providers: [
         NoticesService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: NotificationService, useValue: mockGateway },
+        { provide: NotificationsService, useValue: mockGateway },
       ],
     }).compile();
 
@@ -54,8 +54,8 @@ describe('NoticesService', () => {
       channel: NoticeChannel.SMS,
       notice: { title: 'AGM on Sunday', body: 'Please attend at 10 AM.' },
       member: {
-        memberId: `M-${i}`,
-        mobile: i < 48 ? `+10000000${i}` : 'invalid',
+        membershipNumber: `M-${i}`,
+        mobileNumber: i < 48 ? `+10000000${i}` : 'invalid',
       },
     }));
 
@@ -87,7 +87,7 @@ describe('NoticesService', () => {
       (call) => call[0].data.status === DeliveryStatus.FAILED,
     );
     expect(failedUpdates).toHaveLength(2);
-    expect(failedUpdates[0][0].data.errorMsg).toBe('Invalid mobile number');
-    expect(failedUpdates[1][0].data.errorMsg).toBe('Invalid mobile number');
+    expect(failedUpdates[0][0].data.errorMessage).toBe('Invalid mobile number');
+    expect(failedUpdates[1][0].data.errorMessage).toBe('Invalid mobile number');
   });
 });

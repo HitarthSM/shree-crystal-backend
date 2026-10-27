@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { StatementsService } from './statements.service';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { NotificationService } from '../common/services/notification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const batch = {
   id: 'b1',
@@ -25,7 +25,7 @@ function build() {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 's1', status: 'WITHDRAWN' }),
     },
-    activityLog: { create: jest.fn().mockResolvedValue({}) },
+    auditLog: { create: jest.fn().mockResolvedValue({}) },
   };
   const prisma = {
     statementBatch: { findUnique: jest.fn().mockResolvedValue(batch) },
@@ -41,7 +41,7 @@ function build() {
   };
   const service = new StatementsService(
     prisma as unknown as PrismaService,
-    notifications as unknown as NotificationService,
+    notifications as unknown as NotificationsService,
   );
   return { service, tx, prisma };
 }

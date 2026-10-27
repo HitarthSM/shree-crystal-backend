@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, BatchStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service.js';
-import { NotificationService } from '../common/services/notification.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { BatchUploadStatementsDto } from './dto/batch-upload-statements.dto.js';
 import { ReplaceStatementInput } from './dto/replace-statement.dto.js';
 import { WithdrawStatementDto } from './dto/withdraw-statement.dto.js';
@@ -19,7 +19,7 @@ export class StatementsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notificationService: NotificationService,
+    private readonly notificationService: NotificationsService,
   ) {}
 
   async previewBatchUpload(
@@ -43,22 +43,22 @@ export class StatementsService {
         }
 
         const member = await this.prisma.member.findUnique({
-          where: { memberId: mapping.memberId },
+          where: { membershipNumber: mapping.membershipNumber },
         });
         if (!member) {
           unmatchedList.push({
             fileName: mapping.fileName,
-            reason: `Member ${mapping.memberId} not found`,
+            reason: `Member ${mapping.membershipNumber} not found`,
           });
         } else if (member.status !== 'ACTIVE') {
           unmatchedList.push({
             fileName: mapping.fileName,
-            reason: `Member ${mapping.memberId} is not ACTIVE`,
+            reason: `Member ${mapping.membershipNumber} is not ACTIVE`,
           });
         } else {
           matchedStatements.push({
             memberId: member.id,
-            realMemberId: member.memberId,
+            realMemberId: member.membershipNumber,
             fileUrl: file.url,
             fileName: file.originalname,
           });
@@ -76,7 +76,9 @@ export class StatementsService {
           continue;
         }
         const memberIdStr = match[1];
-        const member = await this.prisma.member.findUnique({ where: { memberId: memberIdStr } });
+        const member = await this.prisma.member.findUnique({
+          where: { membershipNumber: memberIdStr },
+        });
         if (!member) {
           unmatchedList.push({
             fileName: file.originalname,
@@ -90,7 +92,7 @@ export class StatementsService {
         } else {
           matchedStatements.push({
             memberId: member.id,
-            realMemberId: member.memberId,
+            realMemberId: member.membershipNumber,
             fileUrl: file.url,
             fileName: file.originalname,
           });
@@ -100,7 +102,7 @@ export class StatementsService {
 
     const batch = await this.prisma.statementBatch.create({
       data: {
-        adminId,
+        createdById: adminId,
         period: dto.period,
         category: dto.category,
         matchedCount: matchedStatements.length,
@@ -168,14 +170,14 @@ export class StatementsService {
       });
 
       // Log activity
-      await tx.activityLog.create({
+      await tx.auditLog.create({
         data: {
           actorId: adminId,
           actorType: 'ADMIN',
           action: 'STATEMENT_BATCH_PUBLISHED',
           entityType: 'StatementBatch',
           entityId: batchId,
-          meta: { matchedCount: batch.matchedCount, period: batch.period },
+          metadata: { matchedCount: batch.matchedCount, period: batch.period },
         },
       });
     });
@@ -220,14 +222,14 @@ export class StatementsService {
         },
       });
 
-      await tx.activityLog.create({
+      await tx.auditLog.create({
         data: {
           actorId: adminId,
           actorType: 'ADMIN',
           action: 'STATEMENT_REPLACED',
           entityType: 'Statement',
           entityId: id,
-          meta: { reason: dto.reason, newStatementId: created.id },
+          metadata: { reason: dto.reason, newStatementId: created.id },
         },
       });
 
@@ -253,14 +255,14 @@ export class StatementsService {
       }
       const res = await tx.statement.findUniqueOrThrow({ where: { id } });
 
-      await tx.activityLog.create({
+      await tx.auditLog.create({
         data: {
           actorId: adminId,
           actorType: 'ADMIN',
           action: 'STATEMENT_WITHDRAWN',
           entityType: 'Statement',
           entityId: id,
-          meta: { reason: dto.reason },
+          metadata: { reason: dto.reason },
         },
       });
 
@@ -304,7 +306,7 @@ export class StatementsService {
 
     const where: Prisma.StatementWhereInput = {};
     if (memberId) {
-      const member = await this.prisma.member.findUnique({ where: { memberId } });
+      const member = await this.prisma.member.findUnique({ where: { membershipNumber: memberId } });
       if (member) {
         where.memberId = member.id;
       } else {
@@ -321,7 +323,7 @@ export class StatementsService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: { member: { select: { memberId: true, fullName: true } } },
+        include: { member: { select: { membershipNumber: true, fullName: true } } },
       }),
       this.prisma.statement.count({ where }),
     ]);
@@ -333,7 +335,7 @@ export class StatementsService {
     const { page = 1, limit = 10, period, category } = query;
     const skip = (page - 1) * limit;
 
-    const member = await this.prisma.member.findUnique({ where: { memberId } });
+    const member = await this.prisma.member.findUnique({ where: { membershipNumber: memberId } });
     if (!member) {
       throw new NotFoundException('Member not found');
     }
@@ -368,7 +370,7 @@ export class StatementsService {
       throw new NotFoundException('Statement not found');
     }
 
-    if (statement.member.memberId !== authMemberId) {
+    if (statement.member.membershipNumber !== authMemberId) {
       throw new ForbiddenException('You do not have access to this statement');
     }
 

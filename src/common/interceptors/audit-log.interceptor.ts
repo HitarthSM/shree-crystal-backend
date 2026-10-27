@@ -9,7 +9,7 @@ import { Request } from 'express';
 import { Observable, from, throwError } from 'rxjs';
 import { catchError, mergeMap } from 'rxjs/operators';
 import { Prisma } from '@prisma/client';
-import { AuditTrailService, AuditActorType } from '../audit/audit-trail.service.js';
+import { AuditLogService, AuditActorType } from '../audit/audit-log.service.js';
 import type { AuthenticatedUser } from '../../auth/types/auth.types.js';
 
 /** Mutating HTTP methods that trigger audit entries. */
@@ -46,7 +46,7 @@ declare module 'express' {
  */
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
-  constructor(private readonly audit: AuditTrailService) {}
+  constructor(private readonly audit: AuditLogService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request>();
@@ -84,7 +84,7 @@ export class AuditLogInterceptor implements NestInterceptor {
     const route = request.route as { path?: string } | undefined;
 
     const actorType: AuditActorType = user ? user.userType : 'ANONYMOUS';
-    const meta: Prisma.InputJsonObject = {
+    const metadata: Prisma.InputJsonObject = {
       outcome,
       statusCode,
       ...(user && 'role' in user && user.role ? { role: user.role } : {}),
@@ -101,7 +101,7 @@ export class AuditLogInterceptor implements NestInterceptor {
         ctx.resourceId ?? (typeof request.params.id === 'string' ? request.params.id : null),
       // request.ip honours the app's "trust proxy" setting; the raw X-Forwarded-For header is client-controlled.
       ipAddress: request.ip ?? null,
-      meta,
+      metadata,
     });
   }
 }

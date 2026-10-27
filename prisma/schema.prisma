@@ -13,9 +13,9 @@
 // carries either a `status` enum field or an `isActive` boolean. Referential
 // actions are Restrict or SetNull — never Cascade on data rows.
 //
-// ActivityLog immutability
+// AuditLog immutability
 // ─────────────────────────
-// ActivityLog has no `updatedAt`. Application code must NEVER expose an update
+// AuditLog has no `updatedAt`. Application code must NEVER expose an update
 // or delete path for this table.
 //
 // Rate history
@@ -43,12 +43,16 @@ enum MemberStatus {
   ACTIVE
   SUSPENDED
   INACTIVE
+
+  @@map("member_status")
 }
 
 enum AdminRole {
   SUPER_ADMIN
   OPERATOR
   VIEWER
+
+  @@map("admin_role")
 }
 
 enum NoticeCategory {
@@ -57,12 +61,16 @@ enum NoticeCategory {
   CIRCULAR
   URGENT
   SCHEME_UPDATE
+
+  @@map("notice_category")
 }
 
 enum NoticeChannel {
   WEBSITE
   SMS
   EMAIL
+
+  @@map("notice_channel")
 }
 
 /// Delivery record status for a single channel dispatch
@@ -70,29 +78,39 @@ enum DeliveryStatus {
   PENDING
   SENT
   FAILED
+
+  @@map("delivery_status")
 }
 
 enum StatementStatus {
   PUBLISHED
   WITHDRAWN
   SUPERSEDED
+
+  @@map("statement_status")
 }
 
 enum BatchStatus {
   PENDING
   PUBLISHED
+
+  @@map("batch_status")
 }
 
-enum QueryStatus {
+enum TicketStatus {
   OPEN
   IN_PROGRESS
   RESOLVED
+
+  @@map("ticket_status")
 }
 
 enum PendingActionStatus {
   PENDING
   APPROVED
   REJECTED
+
+  @@map("pending_action_status")
 }
 
 /// Generic action types supported by the maker-checker workflow
@@ -105,6 +123,8 @@ enum ActionType {
   LOAN_CLOSURE
   DEPOSIT_SCHEME_CHANGE
   MEMBER_CHANGE_REQUEST_APPROVAL
+
+  @@map("action_type")
 }
 
 enum LoanStatus {
@@ -113,41 +133,55 @@ enum LoanStatus {
   CLOSED
   DEFAULTED
   REJECTED
+
+  @@map("loan_status")
 }
 
 enum RepaymentStatus {
   PENDING
   COMPLETED
   FAILED
+
+  @@map("repayment_status")
 }
 
 enum ChangeRequestStatus {
   PENDING
   APPROVED
   REJECTED
+
+  @@map("change_request_status")
 }
 
 /// Which kind of entity a RateHistory row belongs to
 enum RateEntityType {
   LOAN_TYPE
   DEPOSIT_SCHEME
+
+  @@map("rate_entity_type")
 }
 
-/// Who sent a message in a support query thread
+/// Who sent a message in a support ticket thread
 enum SenderType {
   MEMBER
   ADMIN
+
+  @@map("sender_type")
 }
 
 enum InterestType {
   FLAT
   REDUCING
+
+  @@map("interest_type")
 }
 
 enum DepositType {
   SAVINGS
   RD
   FD
+
+  @@map("deposit_type")
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -158,12 +192,16 @@ enum Gender {
   MALE
   FEMALE
   OTHER
+
+  @@map("gender")
 }
 
 enum ImportStatus {
   PENDING
   COMMITTED
   REJECTED
+
+  @@map("import_status")
 }
 
 /// Core member record. Sensitive identity fields are stored encrypted.
@@ -171,52 +209,51 @@ enum ImportStatus {
 model Member {
   id                  String       @id @default(cuid())
   /// Unique society-issued membership number (e.g. "SCC-00001")
-  memberId            String       @unique
-  fullName            String
-  fatherOrHusbandName String?
-  dob                 DateTime
+  membershipNumber    String       @unique @map("membership_number")
+  fullName            String       @map("full_name")
+  fatherOrHusbandName String?      @map("father_or_husband_name")
+  dateOfBirth         DateTime     @map("date_of_birth")
   gender              Gender
-  addressLine1        String
-  addressLine2        String?
+  addressLine1        String       @map("address_line_1")
+  addressLine2        String?      @map("address_line_2")
   city                String
   state               String
   pincode             String
-  mobile              String       @unique
+  mobileNumber        String       @unique @map("mobile_number")
   email               String?      @unique
   /// Deterministic hash for uniqueness check
-  aadhaarHash         String       @unique
+  aadhaarHash         String       @unique @map("aadhaar_hash")
   /// AES-256-GCM encrypted Aadhaar number — NEVER stored as plain text
   aadhaarEncrypted    String       @map("aadhaar_encrypted")
   /// AES-256-GCM encrypted PAN number — NEVER stored as plain text
   panEncrypted        String?      @map("pan_encrypted")
   /// Profile / KYC document URL (stored in object storage, not inline)
-  photoUrl            String?
-  nomineeName         String?
-  nomineeRelation     String?
-  nomineeContact      String?
-  membershipDate      DateTime     @default(now())
-  shareCapital        Decimal      @default(0) @db.Decimal(14, 2)
+  photoUrl            String?      @map("photo_url")
+  nomineeName         String?      @map("nominee_name")
+  nomineeRelation     String?      @map("nominee_relation")
+  nomineeContact      String?      @map("nominee_contact")
+  membershipDate      DateTime     @default(now()) @map("membership_date")
+  shareCapital        Decimal      @default(0) @map("share_capital") @db.Decimal(14, 2)
   status              MemberStatus @default(ACTIVE)
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
 
   // Auth & Session
-  passwordHash   String?
-  isFirstLogin   Boolean   @default(true)
-  failedAttempts Int       @default(0)
-  lockedUntil    DateTime?
-  sessionVersion Int       @default(1)
+  passwordHash   String?   @map("password_hash")
+  isFirstLogin   Boolean   @default(true) @map("is_first_login")
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  lockedUntil    DateTime? @map("locked_until")
+  sessionVersion Int       @default(1) @map("session_version")
 
   // Relations
   statements       Statement[]
   noticeDeliveries NoticeDelivery[]
   loans            MemberLoan[]
-  supportQueries   SupportQuery[]
+  supportTickets   SupportTicket[]
   changeRequests   MemberChangeRequest[]
   authSessions     AuthSession[]
 
   @@index([status])
-  @@index([memberId])
   @@map("members")
 }
 
@@ -229,31 +266,31 @@ model AdminUser {
   id           String    @id @default(cuid())
   email        String    @unique
   name         String
-  passwordHash String
+  passwordHash String    @map("password_hash")
   role         AdminRole @default(OPERATOR)
   /// Soft-delete flag — never set isActive=false AND delete the row
-  isActive     Boolean   @default(true)
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   // Auth & Session
-  isFirstLogin   Boolean   @default(true)
-  failedAttempts Int       @default(0)
-  lockedUntil    DateTime?
-  sessionVersion Int       @default(1)
+  isFirstLogin   Boolean   @default(true) @map("is_first_login")
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  lockedUntil    DateTime? @map("locked_until")
+  sessionVersion Int       @default(1) @map("session_version")
 
   // Relations — admin may have made/checked many pending actions
-  actionsMade        PendingAction[]       @relation("ActionMadeBy")
-  actionsChecked     PendingAction[]       @relation("ActionCheckedBy")
-  rateChangesMade    RateHistory[]         @relation("RateChangedBy")
-  rateChangesApproved RateHistory[]        @relation("RateApprovedBy")
-  settingsUpdated    Settings[]
-  resolvedRequests   MemberChangeRequest[] @relation("RequestResolvedBy")
-  importBatches      ImportBatch[]
-  statementsUploaded Statement[]
-  statementBatches   StatementBatch[]
-  authSessions       AuthSession[]
+  actionsRequested    PendingAction[]       @relation("ActionRequestedBy")
+  actionsReviewed     PendingAction[]       @relation("ActionReviewedBy")
+  rateChangesMade     RateHistory[]         @relation("RateChangedBy")
+  rateChangesApproved RateHistory[]         @relation("RateApprovedBy")
+  settingsUpdated     Setting[]
+  resolvedRequests    MemberChangeRequest[] @relation("RequestResolvedBy")
+  importBatches       ImportBatch[]
+  statementsUploaded  Statement[]
+  statementBatches    StatementBatch[]
+  authSessions        AuthSession[]
 
   @@index([email])
   @@index([role])
@@ -269,19 +306,19 @@ model AdminUser {
 /// the jti, so presenting an older one means the token was copied and the session is revoked.
 /// Exactly one of adminUserId / memberId is set (enforced by a CHECK in the migration).
 model AuthSession {
-  id           String    @id @default(cuid())
-  adminUserId  String?
-  memberId     String?
-  jtiHash      String
+  id          String    @id @default(cuid())
+  adminUserId String?   @map("admin_user_id")
+  memberId    String?   @map("member_id")
+  jtiHash     String    @map("jti_hash")
   /// The jti before the latest rotation, honoured for a short grace window (lost responses, parallel tabs).
-  prevJtiHash  String?
-  rotatedAt    DateTime?
+  prevJtiHash String?   @map("prev_jti_hash")
+  rotatedAt   DateTime? @map("rotated_at")
   /// Bumped with sessionVersion on password change; a mismatch means the session is stale.
-  userVersion  Int
-  createdAt    DateTime  @default(now())
-  lastUsedAt   DateTime  @default(now())
-  expiresAt    DateTime
-  revokedAt    DateTime?
+  userVersion Int       @map("user_version")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  lastUsedAt  DateTime  @default(now()) @map("last_used_at")
+  expiresAt   DateTime  @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
 
   adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
   member    Member?    @relation(fields: [memberId], references: [id], onDelete: Restrict)
@@ -300,18 +337,18 @@ model AuthSession {
 /// Withdrawn / superseded statements keep their row; only status changes.
 model Statement {
   id           String          @id @default(cuid())
-  memberId     String
+  memberId     String          @map("member_id")
   /// Human-readable period label e.g. "2024-03" or "2023-2024"
   period       String
   category     String
   /// URL to the PDF stored in object storage
-  fileUrl      String
+  fileUrl      String          @map("file_url")
   status       StatementStatus @default(PUBLISHED)
-  uploadedById String
-  publishedAt  DateTime?       @default(now())
-  supersedesId String?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  uploadedById String          @map("uploaded_by_id")
+  publishedAt  DateTime?       @default(now()) @map("published_at")
+  supersedesId String?         @map("supersedes_id")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
 
   member       Member      @relation(fields: [memberId], references: [id], onDelete: Restrict)
   uploadedBy   AdminUser   @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
@@ -330,19 +367,19 @@ model Statement {
 /// Batch preview for statement uploads
 model StatementBatch {
   id                String      @id @default(cuid())
-  adminId           String
+  createdById       String      @map("created_by_id")
   period            String
   category          String
-  matchedCount      Int         @default(0)
-  unmatchedList     Json
-  matchedStatements Json
+  matchedCount      Int         @default(0) @map("matched_count")
+  unmatchedList     Json        @map("unmatched_list")
+  matchedStatements Json        @map("matched_statements")
   status            BatchStatus @default(PENDING)
-  createdAt         DateTime    @default(now())
-  publishedAt       DateTime?
+  createdAt         DateTime    @default(now()) @map("created_at")
+  publishedAt       DateTime?   @map("published_at")
 
-  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
+  createdBy AdminUser @relation(fields: [createdById], references: [id], onDelete: Restrict)
 
-  @@index([adminId])
+  @@index([createdById])
   @@index([status])
   @@map("statement_batches")
 }
@@ -357,13 +394,13 @@ model Notice {
   title         String
   body          String         @db.Text
   category      NoticeCategory @default(GENERAL)
-  publishedAt   DateTime       @default(now())
-  expiresAt     DateTime?
-  isActive      Boolean        @default(true)
+  publishedAt   DateTime       @default(now()) @map("published_at")
+  expiresAt     DateTime?      @map("expires_at")
+  isActive      Boolean        @default(true) @map("is_active")
   /// Optional URL attachment (e.g. AGM agenda PDF)
-  attachmentUrl String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  attachmentUrl String?        @map("attachment_url")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
 
   deliveries NoticeDelivery[]
 
@@ -378,15 +415,15 @@ model Notice {
 
 /// Tracks per-member, per-channel dispatch of a notice.
 model NoticeDelivery {
-  id        String         @id @default(cuid())
-  noticeId  String
-  memberId  String
-  channel   NoticeChannel
-  status    DeliveryStatus @default(PENDING)
-  sentAt    DateTime?
+  id           String         @id @default(cuid())
+  noticeId     String         @map("notice_id")
+  memberId     String         @map("member_id")
+  channel      NoticeChannel
+  status       DeliveryStatus @default(PENDING)
+  sentAt       DateTime?      @map("sent_at")
   /// Error message if delivery failed (for retry / audit)
-  errorMsg  String?
-  createdAt DateTime       @default(now())
+  errorMessage String?        @map("error_message")
+  createdAt    DateTime       @default(now()) @map("created_at")
 
   notice Notice @relation(fields: [noticeId], references: [id], onDelete: Restrict)
   member Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
@@ -403,27 +440,27 @@ model NoticeDelivery {
 
 /// Immutable audit trail. Application code MUST NOT expose update or delete
 /// paths for this table. No updatedAt field by design.
-model ActivityLog {
+model AuditLog {
   id         String   @id @default(cuid())
   /// ID of the actor (AdminUser.id or Member.id)
-  actorId    String
+  actorId    String   @map("actor_id")
   /// "ADMIN" | "MEMBER" | "SYSTEM"
-  actorType  String
+  actorType  String   @map("actor_type")
   /// Human-readable action label e.g. "MEMBER_CREATED"
   action     String
   /// Entity type that was affected e.g. "Member", "MemberLoan"
-  entityType String
+  entityType String   @map("entity_type")
   /// ID of the affected entity
-  entityId   String?
+  entityId   String?  @map("entity_id")
   /// Arbitrary JSON snapshot (before/after or context)
-  meta       Json?
-  ipAddress  String?
-  createdAt  DateTime @default(now())
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([actorId])
   @@index([entityType, entityId])
   @@index([createdAt])
-  @@map("activity_logs")
+  @@map("audit_logs")
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -433,21 +470,21 @@ model ActivityLog {
 /// Master definition of a loan product. Rates here are *current display* only.
 /// Historical rates are tracked in RateHistory.
 model LoanType {
-  id              String       @id @default(cuid())
-  name            String       @unique
-  interestRate    Decimal      @db.Decimal(6, 4)
-  interestType    InterestType @default(REDUCING)
-  maxTenure       Int?
-  processingFee   Decimal      @db.Decimal(14, 2)
-  minAmount       Decimal      @db.Decimal(14, 2)
-  maxAmount       Decimal      @db.Decimal(14, 2)
-  active          Boolean      @default(true)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id            String       @id @default(cuid())
+  name          String       @unique
+  interestRate  Decimal      @map("interest_rate") @db.Decimal(6, 4)
+  interestType  InterestType @default(REDUCING) @map("interest_type")
+  maxTenure     Int?         @map("max_tenure")
+  processingFee Decimal      @map("processing_fee") @db.Decimal(14, 2)
+  minAmount     Decimal      @map("min_amount") @db.Decimal(14, 2)
+  maxAmount     Decimal      @map("max_amount") @db.Decimal(14, 2)
+  isActive      Boolean      @default(true) @map("is_active")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
 
-  loans       MemberLoan[]
+  loans MemberLoan[]
 
-  @@index([active])
+  @@index([isActive])
   @@map("loan_types")
 }
 
@@ -457,16 +494,16 @@ model LoanType {
 
 /// Master definition of a deposit / savings product.
 model DepositScheme {
-  id              String       @id @default(cuid())
-  name            String       @unique
-  type            DepositType  @default(SAVINGS)
-  interestRate    Decimal      @db.Decimal(6, 4)
-  tenureOptions   Json?
-  active          Boolean      @default(true)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id            String      @id @default(cuid())
+  name          String      @unique
+  type          DepositType @default(SAVINGS)
+  interestRate  Decimal     @map("interest_rate") @db.Decimal(6, 4)
+  tenureOptions Json?       @map("tenure_options")
+  isActive      Boolean     @default(true) @map("is_active")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
 
-  @@index([active])
+  @@index([isActive])
   @@map("deposit_schemes")
 }
 
@@ -477,23 +514,23 @@ model DepositScheme {
 /// Ledger of approved rate changes. 
 model RateHistory {
   id            String         @id @default(cuid())
-  schemeId      String
-  schemeType    RateEntityType
-  oldRate       Decimal?       @db.Decimal(6, 4)
-  newRate       Decimal        @db.Decimal(6, 4)
-  effectiveFrom DateTime
-  changedById   String
-  approvedById  String?
-  createdAt     DateTime       @default(now())
+  entityId      String         @map("entity_id")
+  entityType    RateEntityType @map("entity_type")
+  oldRate       Decimal?       @map("old_rate") @db.Decimal(6, 4)
+  newRate       Decimal        @map("new_rate") @db.Decimal(6, 4)
+  effectiveFrom DateTime       @map("effective_from")
+  changedById   String         @map("changed_by_id")
+  approvedById  String?        @map("approved_by_id")
+  createdAt     DateTime       @default(now()) @map("created_at")
 
-  changedBy     AdminUser      @relation("RateChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
-  approvedBy    AdminUser?     @relation("RateApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  changedBy  AdminUser  @relation("RateChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+  approvedBy AdminUser? @relation("RateApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
 
-  loans         MemberLoan[]
+  loans MemberLoan[]
 
-  @@index([schemeType, schemeId])
+  @@index([entityType, entityId])
   @@index([effectiveFrom])
-  @@map("rate_history")
+  @@map("rate_histories")
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -503,19 +540,19 @@ model RateHistory {
 /// A loan issued to a member. rateHistoryId is immutable after disbursement.
 model MemberLoan {
   id                String     @id @default(cuid())
-  memberId          String
-  loanTypeId        String
+  memberId          String     @map("member_id")
+  loanTypeId        String     @map("loan_type_id")
   /// Rate snapshot active at disbursement — immutable after the loan is opened
-  rateHistoryId     String
-  principalAmount   Decimal    @db.Decimal(14, 2)
-  outstandingAmount Decimal    @db.Decimal(14, 2)
+  rateHistoryId     String     @map("rate_history_id")
+  principalAmount   Decimal    @map("principal_amount") @db.Decimal(14, 2)
+  outstandingAmount Decimal    @map("outstanding_amount") @db.Decimal(14, 2)
   status            LoanStatus @default(PENDING_APPROVAL)
   /// Date the principal was actually disbursed (null until approved)
-  disbursedAt       DateTime?
-  closedAt          DateTime?
+  disbursedAt       DateTime?  @map("disbursed_at")
+  closedAt          DateTime?  @map("closed_at")
   notes             String?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
 
   member      Member          @relation(fields: [memberId], references: [id], onDelete: Restrict)
   loanType    LoanType        @relation(fields: [loanTypeId], references: [id], onDelete: Restrict)
@@ -533,17 +570,17 @@ model MemberLoan {
 
 /// A single instalment payment against a loan. Never hard-deleted.
 model LoanRepayment {
-  id            String          @id @default(cuid())
-  loanId        String
-  amount        Decimal         @db.Decimal(14, 2)
-  principalPart Decimal         @db.Decimal(14, 2)
-  interestPart  Decimal         @db.Decimal(14, 2)
-  penaltyPart   Decimal         @default(0) @db.Decimal(14, 2)
-  paidAt        DateTime        @default(now())
-  status        RepaymentStatus @default(PENDING)
+  id              String          @id @default(cuid())
+  loanId          String          @map("loan_id")
+  amount          Decimal         @db.Decimal(14, 2)
+  principalPart   Decimal         @map("principal_part") @db.Decimal(14, 2)
+  interestPart    Decimal         @map("interest_part") @db.Decimal(14, 2)
+  penaltyPart     Decimal         @default(0) @map("penalty_part") @db.Decimal(14, 2)
+  paidAt          DateTime        @default(now()) @map("paid_at")
+  status          RepaymentStatus @default(PENDING)
   /// Reference number from payment gateway / receipt
-  referenceNo   String?
-  createdAt     DateTime        @default(now())
+  referenceNumber String?         @map("reference_number")
+  createdAt       DateTime        @default(now()) @map("created_at")
 
   loan MemberLoan @relation(fields: [loanId], references: [id], onDelete: Restrict)
 
@@ -560,27 +597,27 @@ model LoanRepayment {
 /// statement batch publishes, and any other two-eyes approval workflow.
 /// checkedBy and resolvedAt are null until the action is resolved.
 model PendingAction {
-  id          String              @id @default(cuid())
-  actionType  ActionType
+  id            String              @id @default(cuid())
+  actionType    ActionType          @map("action_type")
   /// Arbitrary JSON payload describing the action (before/after values, IDs, etc.)
-  payload     Json
-  status      PendingActionStatus @default(PENDING)
+  payload       Json
+  status        PendingActionStatus @default(PENDING)
   /// Admin who initiated the action
-  madeById    String
+  requestedById String              @map("requested_by_id")
   /// Admin who approved or rejected (null until resolved)
-  checkedById String?
-  createdAt   DateTime            @default(now())
+  reviewedById  String?             @map("reviewed_by_id")
+  createdAt     DateTime            @default(now()) @map("created_at")
   /// null until the action is approved or rejected
-  resolvedAt  DateTime?
+  resolvedAt    DateTime?           @map("resolved_at")
   /// Optional human-readable note from the checker
-  checkerNote String?
+  reviewNote    String?             @map("review_note")
 
-  madeBy    AdminUser  @relation("ActionMadeBy", fields: [madeById], references: [id], onDelete: Restrict)
-  checkedBy AdminUser? @relation("ActionCheckedBy", fields: [checkedById], references: [id], onDelete: SetNull)
+  requestedBy AdminUser  @relation("ActionRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  reviewedBy  AdminUser? @relation("ActionReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([actionType])
-  @@index([madeById])
+  @@index([requestedById])
   @@map("pending_actions")
 }
 
@@ -589,43 +626,43 @@ model PendingAction {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /// A member's support / grievance ticket. Closed tickets keep their row.
-model SupportQuery {
-  id         String      @id @default(cuid())
-  memberId   String
+model SupportTicket {
+  id         String       @id @default(cuid())
+  memberId   String       @map("member_id")
   subject    String
-  status     QueryStatus @default(OPEN)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  resolvedAt DateTime?
+  status     TicketStatus @default(OPEN)
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+  resolvedAt DateTime?    @map("resolved_at")
 
-  member   Member         @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  messages QueryMessage[]
+  member   Member                 @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  messages SupportTicketMessage[]
 
   @@index([memberId])
   @@index([status])
-  @@map("support_queries")
+  @@map("support_tickets")
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 // QUERY MESSAGE
 // ═════════════════════════════════════════════════════════════════════════════
 
-/// Individual messages in a support query thread (member ↔ admin).
-model QueryMessage {
+/// Individual messages in a support ticket thread (member ↔ admin).
+model SupportTicketMessage {
   id            String     @id @default(cuid())
-  queryId       String
-  senderType    SenderType
+  ticketId      String     @map("ticket_id")
+  senderType    SenderType @map("sender_type")
   /// ID of the sender (Member.id or AdminUser.id)
-  senderId      String
+  senderId      String     @map("sender_id")
   message       String     @db.Text
-  attachmentUrl String?
-  sentAt        DateTime   @default(now())
-  createdAt     DateTime   @default(now())
+  attachmentUrl String?    @map("attachment_url")
+  sentAt        DateTime   @default(now()) @map("sent_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
 
-  query SupportQuery @relation(fields: [queryId], references: [id], onDelete: Restrict)
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
 
-  @@index([queryId])
-  @@map("query_messages")
+  @@index([ticketId])
+  @@map("support_ticket_messages")
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -636,19 +673,19 @@ model QueryMessage {
 /// Requires admin approval before the change is applied to the Member row.
 model MemberChangeRequest {
   id           String              @id @default(cuid())
-  memberId     String
+  memberId     String              @map("member_id")
   /// Name of the field the member wants to change (e.g. "address", "email")
-  fieldName    String
+  fieldName    String              @map("field_name")
   /// JSON-serialised previous value (for audit)
-  oldValue     String?
+  oldValue     String?             @map("old_value")
   /// JSON-serialised requested new value
-  newValue     String
+  newValue     String              @map("new_value")
   status       ChangeRequestStatus @default(PENDING)
-  requestedAt  DateTime            @default(now())
+  requestedAt  DateTime            @default(now()) @map("requested_at")
   /// null until approved or rejected
-  resolvedAt   DateTime?
-  resolvedById String?
-  createdAt    DateTime            @default(now())
+  resolvedAt   DateTime?           @map("resolved_at")
+  resolvedById String?             @map("resolved_by_id")
+  createdAt    DateTime            @default(now()) @map("created_at")
 
   member     Member     @relation(fields: [memberId], references: [id], onDelete: Restrict)
   resolvedBy AdminUser? @relation("RequestResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
@@ -664,15 +701,15 @@ model MemberChangeRequest {
 
 /// Key-value store for global application settings (e.g. interest-cycle day,
 /// SMS templates, feature flags). A single row per key; keys are never deleted.
-model Settings {
+model Setting {
   id          String   @id @default(cuid())
   /// Unique settings key (e.g. "interest.cycle.day", "feature.sms.enabled")
   key         String   @unique
   /// Arbitrary JSON value — can be a primitive, object, or array
   value       Json
   description String?
-  updatedAt   DateTime @updatedAt
-  updatedById String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedById String?  @map("updated_by_id")
 
   updatedBy AdminUser? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
 
@@ -686,22 +723,22 @@ model Settings {
 /// Bulk import batch for members or other entities
 model ImportBatch {
   id          String       @id @default(cuid())
-  filename    String
-  adminId     String
-  totalRows   Int
-  validRows   Int
-  invalidRows Int
+  fileName    String       @map("file_name")
+  createdById String       @map("created_by_id")
+  totalRows   Int          @map("total_rows")
+  validRows   Int          @map("valid_rows")
+  invalidRows Int          @map("invalid_rows")
   /// JSON-serialised array of valid records ready to be committed
-  previewData Json?
+  previewData Json?        @map("preview_data")
   /// JSON-serialised array of row-level errors
-  errorList   Json?
+  errorList   Json?        @map("error_list")
   status      ImportStatus @default(PENDING)
-  createdAt   DateTime     @default(now())
-  committedAt DateTime?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  committedAt DateTime?    @map("committed_at")
 
-  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
+  createdBy AdminUser @relation(fields: [createdById], references: [id], onDelete: Restrict)
 
-  @@index([adminId])
+  @@index([createdById])
   @@index([status])
   @@map("import_batches")
 }

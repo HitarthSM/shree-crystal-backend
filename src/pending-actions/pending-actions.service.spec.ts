@@ -1,0 +1,170 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { PendingActionsService } from './pending-actions.service';
+import { PrismaService } from '../common/prisma/prisma.service';
+import { BadRequestException } from '@nestjs/common';
+import { ActionType, PendingActionStatus } from '@prisma/client';
+
+describe('PendingActionsService', () => {
+  let service: PendingActionsService;
+  let prismaService: PrismaService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        PendingActionsService,
+        {
+          provide: PrismaService,
+          useValue: {
+            pendingAction: {
+              create: jest.fn(),
+              findUnique: jest.fn(),
+              update: jest.fn(),
+              updateMany: jest.fn(),
+              findUniqueOrThrow: jest.fn(),
+              findMany: jest.fn(),
+            },
+            settings: {
+              findUnique: jest.fn(),
+            },
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<PendingActionsService>(PendingActionsService);
+    prismaService = module.get<PrismaService>(PrismaService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
+  describe('maker-checker validation', () => {
+    it.each(Object.values(ActionType))(
+      'should throw BadRequestException if maker attempts to approve their own %s action',
+      async (actionType) => {
+        const makerId = 'admin-id-123';
+        const pendingActionId = 'action-id-456';
+
+        // Mock finding the pending action
+        (prismaService.pendingAction.findUnique as jest.Mock).mockResolvedValue({
+          id: pendingActionId,
+          actionType: actionType,
+          status: PendingActionStatus.PENDING,
+          requestedById: makerId,
+          payload: { dummy: 'data' },
+        });
+
+        // Attempt to approve as the same admin who made it
+        await expect(service.approve(pendingActionId, makerId)).rejects.toThrow(
+          BadRequestException,
+        );
+        await expect(service.approve(pendingActionId, makerId)).rejects.toThrow(
+          'Maker cannot approve their own submission',
+        );
+      },
+    );
+
+    it('should proceed to approve if checker is different from maker and handler exists', async () => {
+      const makerId = 'admin-id-123';
+      const checkerId = 'admin-id-789';
+      const pendingActionId = 'action-id-456';
+
+      const mockHandler = jest.fn().mockResolvedValue(undefined);
+      service.registerHandler(ActionType.MEMBER_STATUS_CHANGE, mockHandler);
+
+      (prismaService.pendingAction.findUnique as jest.Mock).mockResolvedValue({
+        id: pendingActionId,
+        actionType: ActionType.MEMBER_STATUS_CHANGE,
+        status: PendingActionStatus.PENDING,
+        requestedById: makerId,
+        payload: { status: 'ACTIVE' },
+      });
+
+      (prismaService.pendingAction.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      (prismaService.pendingAction.findUniqueOrThrow as jest.Mock).mockResolvedValue({
+        id: pendingActionId,
+        status: PendingActionStatus.APPROVED,
+      });
+
+      await service.approve(pendingActionId, checkerId);
+
+      expect(mockHandler).toHaveBeenCalledWith({ status: 'ACTIVE' }, checkerId);
+      expect(prismaService.pendingAction.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: pendingActionId, status: PendingActionStatus.PENDING },
+          data: expect.objectContaining({
+            status: PendingActionStatus.APPROVED,
+            reviewedById: checkerId,
+          }),
+        }),
+      );
+    });
+
+    it('does not run the handler when another checker already claimed the action', async () => {
+      const mockHandler = jest.fn();
+      service.registerHandler(ActionType.LOAN_APPROVAL, mockHandler);
+      (prismaService.pendingAction.findUnique as jest.Mock).mockResolvedValue({
+        id: 'a1',
+        actionType: ActionType.LOAN_APPROVAL,
+        status: PendingActionStatus.PENDING,
+        requestedById: 'maker',
+        payload: {},
+      });
+      (prismaService.pendingAction.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+
+      await expect(service.approve('a1', 'checker')).rejects.toThrow('no longer pending');
+      expect(mockHandler).not.toHaveBeenCalled();
+    });
+
+    it('releases the claim when the handler throws', async () => {
+      const mockHandler = jest.fn().mockRejectedValue(new Error('boom'));
+      service.registerHandler(ActionType.RATE_CHANGE, mockHandler);
+      (prismaService.pendingAction.findUnique as jest.Mock).mockResolvedValue({
+        id: 'a2',
+        actionType: ActionType.RATE_CHANGE,
+        status: PendingActionStatus.PENDING,
+        requestedById: 'maker',
+        payload: {},
+      });
+      (prismaService.pendingAction.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+      await expect(service.approve('a2', 'checker')).rejects.toThrow('boom');
+      expect(prismaService.pendingAction.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: PendingActionStatus.PENDING }),
+        }),
+      );
+    });
+  });
+
+  describe('findAll', () => {
+    it('never returns Aadhaar/PAN hashes or ciphertext in payloads', async () => {
+      (prismaService.pendingAction.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'p1',
+          actionType: ActionType.MEMBER_EDIT,
+          payload: {
+            memberId: 'm1',
+            reason: 'fix',
+            changes: {
+              city: 'Surat',
+              aadhaarHash: 'hash',
+              aadhaarEncrypted: 'cipher',
+              panEncrypted: 'cipher2',
+            },
+          },
+        },
+      ]);
+
+      const [action] = await service.findAll();
+      const text = JSON.stringify(action.payload);
+
+      expect(text).not.toContain('hash');
+      expect(text).not.toContain('cipher');
+      expect(action.payload).toMatchObject({
+        changes: { city: 'Surat', aadhaar: '(changed)', pan: '(changed)' },
+      });
+    });
+  });
+});

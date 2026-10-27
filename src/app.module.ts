@@ -15,15 +15,15 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { FirstLoginGuard } from './common/guards/first-login.guard.js';
-import { PendingActionModule } from './pending-action/pending-action.module';
+import { PendingActionsModule } from './pending-actions/pending-actions.module';
 import { AdminUsersModule } from './admin-users/admin-users.module.js';
 import { MembersModule } from './members/members.module.js';
 import { StatementsModule } from './statements/statements.module.js';
-import { ActivityLogModule } from './activity-log/activity-log.module.js';
+import { AuditLogsModule } from './audit-logs/audit-logs.module.js';
 import { LoanConfigModule } from './loan-config/loan-config.module.js';
-import { QueriesModule } from './queries/queries.module.js';
+import { SupportTicketsModule } from './support-tickets/support-tickets.module.js';
 import { SettingsModule } from './settings/settings.module.js';
-import { NotificationModule } from './common/services/notification.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { NoticesModule } from './notices/notices.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { StorageModule } from './storage/storage.module.js';
@@ -62,17 +62,17 @@ import { StorageModule } from './storage/storage.module.js';
     // ── Authentication ────────────────────────────────────────────────────
     AuthModule,
 
-    PendingActionModule,
+    PendingActionsModule,
 
     SettingsModule,
-    NotificationModule,
+    NotificationsModule,
     NoticesModule,
     AdminUsersModule,
     MembersModule,
     StatementsModule,
-    ActivityLogModule,
+    AuditLogsModule,
     LoanConfigModule,
-    QueriesModule,
+    SupportTicketsModule,
     DashboardModule,
     StorageModule,
   ],

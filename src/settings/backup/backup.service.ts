@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { SettingsService } from '../settings.service.js';
 import { ModuleRef } from '@nestjs/core';
-import { NotificationService } from '../../common/services/notification.service.js';
+import { NotificationsService } from '../../notifications/notifications.service.js';
 
 @Injectable()
 export class BackupService {
@@ -64,8 +64,8 @@ export class BackupService {
 
   private async notifySuperAdminOfFailure(errorMessage: string) {
     try {
-      // Use strict: false because NotificationService is provided elsewhere
-      const gateway = this.moduleRef.get(NotificationService, { strict: false });
+      // Use strict: false because NotificationsService is provided elsewhere
+      const gateway = this.moduleRef.get(NotificationsService, { strict: false });
 
       const adminEmail = await this.settingsService.getSetting<string>('admin.superAdminEmail');
       const adminPhone = await this.settingsService.getSetting<string>('admin.superAdminPhone');

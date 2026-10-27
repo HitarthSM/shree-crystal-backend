@@ -3,8 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { ActionType, MemberStatus } from '@prisma/client';
 import { MembersService } from './members.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { EncryptionService, NotificationService } from '../../common/services/index';
-import { ActionHandler, PendingActionService } from '../../pending-action/pending-action.service';
+import { EncryptionService, NotificationsService } from '../../common/services/index';
+import {
+  ActionHandler,
+  PendingActionsService,
+} from '../../pending-actions/pending-actions.service';
 
 describe('MembersService approval handlers', () => {
   const handlers = new Map<ActionType, ActionHandler>();
@@ -18,7 +21,7 @@ describe('MembersService approval handlers', () => {
   } as unknown as PrismaService;
   const pendingActions = {
     registerHandler: (type: ActionType, handler: ActionHandler) => handlers.set(type, handler),
-  } as unknown as PendingActionService;
+  } as unknown as PendingActionsService;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -26,7 +29,7 @@ describe('MembersService approval handlers', () => {
     new MembersService(
       prisma,
       {} as EncryptionService,
-      {} as NotificationService,
+      {} as NotificationsService,
       pendingActions,
       {} as ConfigService,
     );

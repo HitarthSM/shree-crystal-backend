@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { Prisma, LoanType, ActionType, RateEntityType, InterestType } from '@prisma/client';
-import { PendingActionService } from '../pending-action/pending-action.service';
+import { PendingActionsService } from '../pending-actions/pending-actions.service';
 import {
   CreateLoanTypeDto,
   UpdateLoanTypeDto,
@@ -11,8 +11,8 @@ import {
 } from './dto';
 
 export type RateChangePayload = {
-  schemeId: string;
-  schemeType: RateEntityType;
+  entityId: string;
+  entityType: RateEntityType;
   oldRate: number | null;
   newRate: number;
   effectiveFrom: string; // ISO String
@@ -26,14 +26,14 @@ export class LoanConfigService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly pendingActionService: PendingActionService,
+    private readonly pendingActionService: PendingActionsService,
   ) {
-    this.pendingActionService.registerHandler(ActionType.RATE_CHANGE, (payload, checkedById) =>
-      this.handleRateChange(payload as RateChangePayload, checkedById!),
+    this.pendingActionService.registerHandler(ActionType.RATE_CHANGE, (payload, reviewedById) =>
+      this.handleRateChange(payload as RateChangePayload, reviewedById!),
     );
     this.pendingActionService.registerHandler(
       ActionType.DEPOSIT_SCHEME_CHANGE,
-      (payload, checkedById) => this.handleRateChange(payload as RateChangePayload, checkedById!),
+      (payload, reviewedById) => this.handleRateChange(payload as RateChangePayload, reviewedById!),
     );
   }
 
@@ -41,8 +41,8 @@ export class LoanConfigService {
 
   async getActiveRates() {
     const [loanTypes, depositSchemes] = await Promise.all([
-      this.prisma.loanType.findMany({ where: { active: true } }),
-      this.prisma.depositScheme.findMany({ where: { active: true } }),
+      this.prisma.loanType.findMany({ where: { isActive: true } }),
+      this.prisma.depositScheme.findMany({ where: { isActive: true } }),
     ]);
     return { loanTypes, depositSchemes };
   }
@@ -122,8 +122,8 @@ export class LoanConfigService {
     );
 
     const payload: RateChangePayload = {
-      schemeId: id,
-      schemeType: RateEntityType.LOAN_TYPE,
+      entityId: id,
+      entityType: RateEntityType.LOAN_TYPE,
       oldRate: Number(current.interestRate),
       newRate: dto.interestRate ?? Number(current.interestRate),
       effectiveFrom: effectiveFrom.toISOString(),
@@ -135,7 +135,7 @@ export class LoanConfigService {
         processingFee: dto.processingFee,
         minAmount: dto.minAmount,
         maxAmount: dto.maxAmount,
-        active: dto.active,
+        isActive: dto.isActive,
       },
     };
 
@@ -165,8 +165,8 @@ export class LoanConfigService {
     );
 
     const payload: RateChangePayload = {
-      schemeId: id,
-      schemeType: RateEntityType.DEPOSIT_SCHEME,
+      entityId: id,
+      entityType: RateEntityType.DEPOSIT_SCHEME,
       oldRate: Number(current.interestRate),
       newRate: dto.interestRate ?? Number(current.interestRate),
       effectiveFrom: effectiveFrom.toISOString(),
@@ -175,7 +175,7 @@ export class LoanConfigService {
         name: dto.name,
         type: dto.type,
         tenureOptions: dto.tenureOptions,
-        active: dto.active,
+        isActive: dto.isActive,
       },
     };
 
@@ -189,7 +189,7 @@ export class LoanConfigService {
   }
 
   async handleRateChange(payload: RateChangePayload, approvedById: string) {
-    this.logger.log(`Handling rate change for ${payload.schemeType} ${payload.schemeId}`);
+    this.logger.log(`Handling rate change for ${payload.entityType} ${payload.entityId}`);
 
     const effectiveFromDate = new Date(payload.effectiveFrom);
     const now = new Date();
@@ -197,8 +197,8 @@ export class LoanConfigService {
     await this.prisma.$transaction(async (tx) => {
       await tx.rateHistory.create({
         data: {
-          schemeId: payload.schemeId,
-          schemeType: payload.schemeType,
+          entityId: payload.entityId,
+          entityType: payload.entityType,
           oldRate: payload.oldRate,
           newRate: payload.newRate,
           effectiveFrom: effectiveFromDate,
@@ -208,9 +208,9 @@ export class LoanConfigService {
       });
 
       if (effectiveFromDate <= now) {
-        if (payload.schemeType === RateEntityType.LOAN_TYPE) {
+        if (payload.entityType === RateEntityType.LOAN_TYPE) {
           await tx.loanType.update({
-            where: { id: payload.schemeId },
+            where: { id: payload.entityId },
             data: {
               ...payload.data,
               interestRate: payload.newRate,
@@ -218,27 +218,27 @@ export class LoanConfigService {
           });
         } else {
           await tx.depositScheme.update({
-            where: { id: payload.schemeId },
+            where: { id: payload.entityId },
             data: {
               ...payload.data,
               interestRate: payload.newRate,
             },
           });
         }
-        this.logger.log(`Applied rate change to ${payload.schemeType} immediately.`);
+        this.logger.log(`Applied rate change to ${payload.entityType} immediately.`);
       } else {
         const dataWithoutRate = { ...payload.data };
         delete dataWithoutRate.interestRate;
 
         if (Object.keys(dataWithoutRate).length > 0) {
-          if (payload.schemeType === RateEntityType.LOAN_TYPE) {
+          if (payload.entityType === RateEntityType.LOAN_TYPE) {
             await tx.loanType.update({
-              where: { id: payload.schemeId },
+              where: { id: payload.entityId },
               data: dataWithoutRate,
             });
           } else {
             await tx.depositScheme.update({
-              where: { id: payload.schemeId },
+              where: { id: payload.entityId },
               data: dataWithoutRate,
             });
           }

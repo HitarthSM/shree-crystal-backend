@@ -23,7 +23,7 @@ export class DashboardService {
     });
 
     // 3. Recent Activity Log
-    const recentActivity = await this.prisma.activityLog.findMany({
+    const recentActivity = await this.prisma.auditLog.findMany({
       orderBy: { createdAt: 'desc' },
       take: 5,
     });

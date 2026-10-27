@@ -16,9 +16,9 @@ import { Gender } from '@prisma/client';
 
 @ValidatorConstraint({ name: 'isAdult', async: false })
 export class IsAdultConstraint implements ValidatorConstraintInterface {
-  validate(dob: string, args: ValidationArguments) {
-    if (!dob) return false;
-    const date = new Date(dob);
+  validate(dateOfBirth: string, args: ValidationArguments) {
+    if (!dateOfBirth) return false;
+    const date = new Date(dateOfBirth);
     if (isNaN(date.getTime())) return false;
 
     const today = new Date();
@@ -50,7 +50,7 @@ export class CreateMemberDto {
   @ApiProperty({ example: '1990-01-01' })
   @IsDateString()
   @Validate(IsAdultConstraint)
-  dob: string;
+  dateOfBirth: string;
 
   @ApiProperty({ enum: Gender })
   @IsEnum(Gender)
@@ -81,7 +81,7 @@ export class CreateMemberDto {
   @ApiProperty()
   @IsString()
   @Matches(/^[0-9]{10}$/, { message: 'Mobile must be a 10-digit number' })
-  mobile: string;
+  mobileNumber: string;
 
   @ApiPropertyOptional()
   @IsEmail()

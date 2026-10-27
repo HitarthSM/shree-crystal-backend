@@ -64,8 +64,8 @@ export class AuthController {
       return {
         ...base,
         name: user.fullName,
-        memberId: user.memberId,
-        mobile: user.mobile,
+        membershipNumber: user.membershipNumber,
+        mobileNumber: user.mobileNumber,
         email: user.email,
         status: user.status,
       };

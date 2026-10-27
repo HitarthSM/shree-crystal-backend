@@ -3,7 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomUUID } from 'crypto';
-import { AuditTrailService, AuditActorType } from '../common/audit/audit-trail.service.js';
+import { AuditLogService, AuditActorType } from '../common/audit/audit-log.service.js';
 import { UserType, AuthenticatedUser, AuthAdminUser, AuthMemberUser } from './types/auth.types.js';
 
 interface JwtPayload {
@@ -50,14 +50,14 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-    private audit: AuditTrailService,
+    private audit: AuditLogService,
   ) {}
 
   /** Security events go to the audit trail. Never pass passwords, tokens or identifiers here. */
   private async recordEvent(
     action: string,
     actor: { id: string; type: AuditActorType },
-    meta: Record<string, string | number | boolean> = {},
+    metadata: Record<string, string | number | boolean> = {},
     ip?: string,
   ): Promise<void> {
     await this.audit.record({
@@ -67,7 +67,7 @@ export class AuthService {
       entityType: 'Auth',
       entityId: actor.id === 'anonymous' ? null : actor.id,
       ipAddress: ip ?? null,
-      meta,
+      metadata,
     });
   }
 
@@ -83,9 +83,9 @@ export class AuthService {
       const admin = await this.prisma.adminUser.findUnique({ where: { email: identifier } });
       if (admin) return { user: admin as unknown as AuthenticatedUser, type: 'ADMIN' };
     } else {
-      let member = await this.prisma.member.findUnique({ where: { mobile: identifier } });
+      let member = await this.prisma.member.findUnique({ where: { mobileNumber: identifier } });
       if (!member) {
-        member = await this.prisma.member.findUnique({ where: { memberId: identifier } });
+        member = await this.prisma.member.findUnique({ where: { membershipNumber: identifier } });
       }
       if (member) return { user: member as unknown as AuthenticatedUser, type: 'MEMBER' };
     }

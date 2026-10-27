@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service.js';
-import { NotificationService } from '../common/services/notification.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { Prisma, DeliveryStatus } from '@prisma/client';
 
 @Injectable()
@@ -9,7 +9,7 @@ export class NoticesService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly gateway: NotificationService,
+    private readonly gateway: NotificationsService,
   ) {}
 
   async create(dto: Prisma.NoticeCreateInput & { memberIds?: string[]; allMembers?: boolean }) {
@@ -33,7 +33,7 @@ export class NoticesService {
       const deliveries = activeMembers.map((member) => ({
         noticeId: notice.id,
         memberId: member.id,
-        channel: member.mobile ? 'SMS' : 'EMAIL',
+        channel: member.mobileNumber ? 'SMS' : 'EMAIL',
       })) as any[];
 
       await this.prisma.noticeDelivery.createMany({
@@ -147,8 +147,8 @@ export class NoticesService {
         const { title, body } = delivery.notice;
         const message = `${title}\n${body}`;
 
-        if (delivery.channel === 'SMS' && delivery.member.mobile) {
-          success = await this.gateway.sendSms(delivery.member.mobile, message);
+        if (delivery.channel === 'SMS' && delivery.member.mobileNumber) {
+          success = await this.gateway.sendSms(delivery.member.mobileNumber, message);
         } else if (delivery.channel === 'EMAIL' && delivery.member.email) {
           success = await this.gateway.sendEmail(delivery.member.email, title, message);
         } else {
@@ -164,20 +164,20 @@ export class NoticesService {
             },
           });
           this.logger.log(
-            `Successfully delivered notice to member ${delivery.member.memberId} via ${delivery.channel}`,
+            `Successfully delivered notice to member ${delivery.member.membershipNumber} via ${delivery.channel}`,
           );
         } else {
           throw new Error('Gateway returned false');
         }
       } catch (error: any) {
         this.logger.error(
-          `Failed delivery for notice ${noticeId} to member ${delivery.member.memberId}: ${error.message}`,
+          `Failed delivery for notice ${noticeId} to member ${delivery.member.membershipNumber}: ${error.message}`,
         );
         await this.prisma.noticeDelivery.update({
           where: { id: delivery.id },
           data: {
             status: DeliveryStatus.FAILED,
-            errorMsg: error.message,
+            errorMessage: error.message,
           },
         });
       }

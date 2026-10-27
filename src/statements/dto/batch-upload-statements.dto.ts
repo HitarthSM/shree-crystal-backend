@@ -4,7 +4,7 @@ import { Type } from 'class-transformer';
 export class ExplicitMappingDto {
   @IsString()
   @IsNotEmpty()
-  memberId: string;
+  membershipNumber: string;
 
   @IsString()
   @IsNotEmpty()

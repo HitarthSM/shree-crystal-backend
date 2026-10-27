@@ -2,7 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { ModuleRef } from '@nestjs/core';
-import { NotificationService } from '../common/services/notification.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { SocietyDetailsDto } from './dto/society-details.dto.js';
 import {
   NotificationGatewayDto,
@@ -21,7 +21,7 @@ export class SettingsService {
   ) {}
 
   async getSetting<T = any>(key: string): Promise<T | null> {
-    const setting = await this.prisma.settings.findUnique({
+    const setting = await this.prisma.setting.findUnique({
       where: { key },
     });
     if (setting) {
@@ -44,7 +44,7 @@ export class SettingsService {
   async updateSetting(key: string, value: any, adminId?: string): Promise<void> {
     // If it's a gateway credential, test it first
     if (key === 'notification.sms.apiKey' && value) {
-      const gateway = this.moduleRef.get(NotificationService, { strict: false });
+      const gateway = this.moduleRef.get(NotificationsService, { strict: false });
       const testPhone =
         (await this.getSetting<string>('notification.sms.testNumber')) || '+1234567890';
       this.logger.log(`Testing new SMS API key by sending a test message to ${testPhone}`);
@@ -59,7 +59,7 @@ export class SettingsService {
     }
 
     if (key === 'notification.email.smtpUrl' && value) {
-      const gateway = this.moduleRef.get(NotificationService, { strict: false });
+      const gateway = this.moduleRef.get(NotificationsService, { strict: false });
       const testEmail =
         (await this.getSetting<string>('notification.email.testEmail')) || 'test@example.com';
       this.logger.log(`Testing new SMTP URL by sending a test email to ${testEmail}`);
@@ -74,7 +74,7 @@ export class SettingsService {
       }
     }
 
-    await this.prisma.settings.upsert({
+    await this.prisma.setting.upsert({
       where: { key },
       update: {
         value: value === undefined ? null : value, // allow nulling out
